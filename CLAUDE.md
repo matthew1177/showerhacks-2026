@@ -21,6 +21,7 @@ A Gartic Phone–style party game, but with an AI image model doing the drawing:
 - The user asked for the text side only for now (prompts/guesses passed between players like text messages) — **no AI image model yet**. Image steps are an opaque random seed rendered as the placeholder gradient from `client/src/mock.js`.
 - Client connects via `client/src/net.js` (`useRoom`) to same-origin `/ws` (Vite proxies it to port 3001 in dev, which keeps it inside Discord's CSP). Room is picked with `?room=<code>` (default `"default"`); player id is per-tab (sessionStorage) so multiple tabs = multiple players for testing.
 - Rules: chain length = min(rounds setting, player count); ≥2 players to start; host controls settings, start, and reveal stepping; drafts stream to the server so typed text counts on timeout; disconnected players are skipped for the turn.
+- The user plans to implement the image model integration themselves (hook point: the image step in `endTurn` in `server/game.js`).
 - No Discord SDK integration yet (room code should become the Activity instance id).
 
 ## Commands
