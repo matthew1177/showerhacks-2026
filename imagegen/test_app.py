@@ -17,9 +17,9 @@ class ModelThreadTest(unittest.IsolatedAsyncioTestCase):
             model_thread = threading.get_ident()
             self.assertNotEqual(model_thread, event_loop_thread)
 
-            def generate(prompt, style):
+            def generate(prompt, style, creativity):
                 self.assertEqual(threading.get_ident(), model_thread)
-                calls.append((prompt, style))
+                calls.append((prompt, style, creativity))
                 return prompt.encode()
 
             return generate
@@ -27,12 +27,12 @@ class ModelThreadTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(image_api, "load_generator", load_generator):
             async with image_api.lifespan(image_api.app):
                 responses = await asyncio.gather(*(
-                    image_api.generate_image(image_api.GenerateRequest(prompt=prompt, style="Cartoon"))
+                    image_api.generate_image(image_api.GenerateRequest(prompt=prompt, style="Cartoon", creativity=80))
                     for prompt in ("duck", "panda")
                 ))
 
         self.assertEqual([response.body for response in responses], [b"duck", b"panda"])
-        self.assertEqual(calls, [("duck", "Cartoon"), ("panda", "Cartoon")])
+        self.assertEqual(calls, [("duck", "Cartoon", 80), ("panda", "Cartoon", 80)])
 
 
 if __name__ == "__main__":

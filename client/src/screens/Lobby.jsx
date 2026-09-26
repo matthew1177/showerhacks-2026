@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Avatar } from '../components/ui'
 import { ART_STYLES } from '../mock'
 
+const creativityLabel = (n) => (n < 35 ? 'Literal' : n < 63 ? 'Balanced' : n < 88 ? 'Creative' : 'Wild')
+
 export default function Lobby({ players, me, isHost, hostId, settings, onSettings, onName, onStart }) {
   const [name, setName] = useState(null)
   const set = (k) => (e) => onSettings({ ...settings, [k]: e.target.value })
@@ -73,6 +75,19 @@ export default function Lobby({ players, me, isHost, hostId, settings, onSetting
             <select value={settings.guessSeconds} onChange={set('guessSeconds')} disabled={!isHost}>
               {[30, 45, 60, 90].map((n) => <option key={n} value={n}>{n}s</option>)}
             </select>
+          </label>
+          <label className="field">
+            <span>Creativity <span className="pill">{creativityLabel(settings.creativity ?? 50)}</span></span>
+            <input
+              type="range"
+              className="slider"
+              min={0}
+              max={100}
+              step={5}
+              value={settings.creativity ?? 50}
+              onChange={set('creativity')}
+              disabled={!isHost}
+            />
           </label>
           <div className="field">
             <span>Art style</span>

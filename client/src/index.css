@@ -140,6 +140,9 @@ h1, h2, p { margin: 0; }
   background: var(--bg-3); border: 1px solid rgb(203 166 247 / 16%); border-radius: 10px;
 }
 .lobby select { cursor: pointer; }
+.slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.slider:disabled { cursor: default; opacity: 0.6; }
+.slider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .lobby select:hover:not(:disabled) { border-color: rgb(203 166 247 / 45%); }
 .lobby select:disabled { cursor: default; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }

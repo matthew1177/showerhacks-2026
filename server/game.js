@@ -26,7 +26,7 @@ export class Room {
     this.players = [] // { id, name, avatarUrl, color, connected }
     this.sockets = new Map() // playerId -> ws
     this.hostId = null
-    this.settings = { rounds: 6, promptSeconds: 60, guessSeconds: 45, artStyle: 'Any' }
+    this.settings = { rounds: 6, promptSeconds: 60, guessSeconds: 45, artStyle: 'Any', creativity: 50 }
     this.phase = 'lobby' // lobby | play | reveal
     this.game = null
     this.reveal = null
@@ -144,6 +144,9 @@ export class Room {
       promptSeconds: pick(s.promptSeconds, TIME_OPTIONS, this.settings.promptSeconds),
       guessSeconds: pick(s.guessSeconds, TIME_OPTIONS, this.settings.guessSeconds),
       artStyle: ART_STYLES.includes(s.artStyle) ? s.artStyle : this.settings.artStyle,
+      creativity: Number.isFinite(Number(s.creativity))
+        ? Math.min(100, Math.max(0, Math.round(Number(s.creativity))))
+        : this.settings.creativity,
     }
   }
 
@@ -231,7 +234,7 @@ export class Room {
 
   async renderImage(step, prompt) {
     try {
-      const id = await generateImage(prompt, this.settings.artStyle)
+      const id = await generateImage(prompt, this.settings.artStyle, this.settings.creativity)
       if (this.disposed) return deleteImage(id)
       this.imageIds.push(id)
       step.url = `/images/${id}.png`

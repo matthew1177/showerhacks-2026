@@ -57,6 +57,7 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
 class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=200)
     style: str = "Any"
+    creativity: int = Field(default=50, ge=0, le=100)
 
 
 def require_game_server(authorization: str = Header(default="")):
@@ -69,7 +70,7 @@ async def generate_image(req: GenerateRequest):
     if req.style not in ART_STYLES:
         raise HTTPException(status_code=422, detail="unknown style")
     png = await asyncio.get_running_loop().run_in_executor(
-        app.state.worker, app.state.generate, req.prompt, req.style
+        app.state.worker, app.state.generate, req.prompt, req.style, req.creativity
     )
     return Response(png, media_type="image/png")
 

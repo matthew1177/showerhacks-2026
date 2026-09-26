@@ -10,11 +10,11 @@ export const imagesEnabled = () => Boolean(process.env.IMAGE_API_URL && process.
 
 const images = new Map() // id -> PNG Buffer
 
-export async function generateImage(prompt, style) {
+export async function generateImage(prompt, style, creativity) {
   const res = await fetch(`${process.env.IMAGE_API_URL}/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.IMAGE_API_SECRET}` },
-    body: JSON.stringify({ prompt, style }),
+    body: JSON.stringify({ prompt, style, creativity }),
     signal: AbortSignal.timeout(Number(process.env.IMAGE_TIMEOUT_MS) || 60_000),
   })
   if (!res.ok) throw new Error(`image API responded ${res.status}`)

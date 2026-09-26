@@ -67,3 +67,16 @@ test('timed-out rounds continue past the player count and retain each round’s 
   ])
   assert.equal(texts.filter((step) => step.text === '(ran out of time)').length, 3)
 })
+
+test('creativity setting is clamped to 0-100 and kept when omitted', (t) => {
+  const room = new Room('creativity-test')
+  t.after(() => room.dispose())
+  room.join({ send() {} }, 'host')
+  assert.equal(room.settings.creativity, 50)
+  room.handle('host', { type: 'settings', settings: { creativity: '85' } })
+  assert.equal(room.settings.creativity, 85)
+  room.handle('host', { type: 'settings', settings: { creativity: 250 } })
+  assert.equal(room.settings.creativity, 100)
+  room.handle('host', { type: 'settings', settings: { rounds: 4 } })
+  assert.equal(room.settings.creativity, 100)
+})
