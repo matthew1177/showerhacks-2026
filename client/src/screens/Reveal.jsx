@@ -1,57 +1,60 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Avatar, GeneratedImage } from '../components/ui'
-import { CHAIN } from '../mock'
 
-export default function Reveal({ onLobby }) {
-  const [shown, setShown] = useState(1)
+export default function Reveal({ reveal, playersById, isHost, onNext, onLobby }) {
   const endRef = useRef(null)
-  const total = CHAIN.steps.length
-  const original = CHAIN.steps[0].text
-  const final = CHAIN.steps[total - 1].text
+  const { steps, total } = reveal
+  const owner = playersById[reveal.ownerId]
+  const done = steps.length === total
+  const lastChain = reveal.chain + 1 === reveal.chains
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [shown])
+  }, [steps.length])
 
   return (
     <div className="screen reveal">
       <header className="topbar">
-        <div className="topbar__round">Chain 1/6</div>
+        <div className="topbar__round">Chain {reveal.chain + 1}/{reveal.chains}</div>
         <div className="topbar__label">
-          <Avatar player={CHAIN.owner} size={22} /> {CHAIN.owner.name}'s chain
+          <Avatar player={owner} size={22} /> {owner.name}'s chain
         </div>
         <div />
       </header>
 
-      <main className="feed">
-        {CHAIN.steps.slice(0, shown).map((step, i) =>
-          step.kind === 'image' ? (
-            <div key={i} className="msg msg--image">
-              <div className="msg__bot">AI</div>
-              <div className="msg__body">
-                <div className="msg__name">Image model <span className="pill pill--bot">BOT</span></div>
-                <GeneratedImage seed={step.text} />
+      <main className="feed" key={reveal.chain}>
+        {steps.map((step, i) => {
+          if (step.kind === 'image') {
+            return (
+              <div key={i} className="msg msg--image">
+                <div className="msg__bot">AI</div>
+                <div className="msg__body">
+                  <div className="msg__name">Image model <span className="pill pill--bot">BOT</span></div>
+                  <GeneratedImage seed={step.seed} />
+                </div>
               </div>
-            </div>
-          ) : (
+            )
+          }
+          const player = playersById[step.playerId]
+          return (
             <div key={i} className="msg">
-              <Avatar player={step.player} size={40} />
+              <Avatar player={player} size={40} />
               <div className="msg__body">
-                <div className="msg__name" style={{ color: step.player.color }}>
-                  {step.player.name}
+                <div className="msg__name" style={{ color: player.color }}>
+                  {player.name}
                   <span className="muted small">{step.kind === 'prompt' ? 'wrote' : 'guessed'}</span>
                 </div>
                 <div className={`bubble ${step.kind === 'prompt' ? 'bubble--prompt' : ''}`}>{step.text}</div>
               </div>
             </div>
           )
-        )}
+        })}
 
-        {shown === total && (
+        {done && (
           <div className="summary">
-            <div><span className="muted small">Started as</span><p>“{original}”</p></div>
+            <div><span className="muted small">Started as</span><p>“{steps[0].text}”</p></div>
             <div className="summary__arrow">→</div>
-            <div><span className="muted small">Ended as</span><p>“{final}”</p></div>
+            <div><span className="muted small">Ended as</span><p>“{steps[total - 1].text}”</p></div>
           </div>
         )}
         <div ref={endRef} />
@@ -61,9 +64,13 @@ export default function Reveal({ onLobby }) {
         <div className="reactions">
           {['😂', '🔥', '💀', '🤯'].map((e) => <button key={e} className="reaction">{e}</button>)}
         </div>
-        {shown < total
-          ? <button className="btn btn--primary" onClick={() => setShown(shown + 1)}>Next ▸</button>
-          : <button className="btn btn--primary" onClick={onLobby}>Back to lobby</button>}
+        {!isHost
+          ? <span className="muted small">The host is revealing…</span>
+          : !done
+            ? <button className="btn btn--primary" onClick={onNext}>Next ▸</button>
+            : !lastChain
+              ? <button className="btn btn--primary" onClick={onNext}>Next chain ▸</button>
+              : <button className="btn btn--primary" onClick={onLobby}>Back to lobby</button>}
       </footer>
     </div>
   )

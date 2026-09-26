@@ -242,14 +242,18 @@ select {
 }
 .reaction:hover { border-color: var(--accent); }
 
-/* ---------- dev screen switcher ---------- */
-.devnav {
-  position: fixed; left: 8px; bottom: 64px; display: flex; gap: 2px; padding: 3px;
-  background: var(--bg-3); border-radius: 6px; font-size: 11px; z-index: 10; opacity: .5;
+/* ---------- connection ---------- */
+.banner {
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 10;
+  padding: 6px 12px; border-radius: 6px; font-size: 13px;
+  background: var(--yellow); color: var(--on-accent);
 }
-.devnav:hover { opacity: 1; }
-.devnav button { border: 0; background: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; color: var(--muted); }
-.devnav button.is-on { background: var(--accent); color: var(--on-accent); }
+.strip__p.is-away { filter: grayscale(1); }
+.name-input {
+  width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: var(--bg-3);
+  font-size: 15px; outline: none;
+}
+.name-input:focus { box-shadow: 0 0 0 2px var(--accent); }
 
 /* ---------- small / PiP sizes ---------- */
 @media (max-width: 520px) {

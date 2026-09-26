@@ -7,5 +7,7 @@ export default defineConfig({
   server: {
     // Discord Activities are served through a tunnel (e.g. cloudflared) during development.
     allowedHosts: true,
+    // Game server (../server). Same-origin keeps it inside Discord's CSP.
+    proxy: { '/ws': { target: 'ws://localhost:3001', ws: true } },
   },
 })

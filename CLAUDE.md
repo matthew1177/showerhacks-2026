@@ -17,13 +17,15 @@ A Gartic Phone–style party game, but with an AI image model doing the drawing:
 - Frontend: **React** (Vite) in `client/`.
 
 ## Current status
-- UI only. Screens live in `client/src/screens/` and run on mock data from `client/src/mock.js`; there is no backend, Discord SDK integration, or image model hooked up yet.
-- A dev-only screen switcher (bottom-left) lets you jump between screens.
+- **Multiplayer backend** (`server/`): Node + `ws` WebSocket server, server-authoritative. `server/game.js` holds the room/game logic (lobby → play turns → reveal); `server/index.js` wires up HTTP/WebSocket and serves `client/dist` in production. Clients get a per-player view of state only, so nobody can see other chains early.
+- The user asked for the text side only for now (prompts/guesses passed between players like text messages) — **no AI image model yet**. Image steps are an opaque random seed rendered as the placeholder gradient from `client/src/mock.js`.
+- Client connects via `client/src/net.js` (`useRoom`) to same-origin `/ws` (Vite proxies it to port 3001 in dev, which keeps it inside Discord's CSP). Room is picked with `?room=<code>` (default `"default"`); player id is per-tab (sessionStorage) so multiple tabs = multiple players for testing.
+- Rules: chain length = min(rounds setting, player count); ≥2 players to start; host controls settings, start, and reveal stepping; drafts stream to the server so typed text counts on timeout; disconnected players are skipped for the turn.
+- No Discord SDK integration yet (room code should become the Activity instance id).
 
 ## Commands
 ```
-cd client
-npm install
-npm run dev      # http://localhost:5173
-npm run build
+cd server && npm install && npm run dev   # game server on :3001
+cd client && npm install && npm run dev   # http://localhost:5173 (open several tabs to play)
+cd client && npm run build                # then `cd server && npm start` serves everything on :3001
 ```

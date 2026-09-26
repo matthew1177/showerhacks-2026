@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Avatar } from '../components/ui'
-import { ART_STYLES, ME, PLAYERS, SETTINGS } from '../mock'
+import { ART_STYLES } from '../mock'
 
-export default function Lobby({ onStart }) {
-  const [settings, setSettings] = useState(SETTINGS)
-  const set = (k) => (e) => setSettings({ ...settings, [k]: e.target.value })
+export default function Lobby({ players, me, isHost, hostId, settings, onSettings, onName, onStart }) {
+  const [name, setName] = useState(me.name)
+  const set = (k) => (e) => onSettings({ ...settings, [k]: e.target.value })
+  const commitName = () => name.trim() && name.trim() !== me.name ? onName(name.trim()) : setName(me.name)
 
   return (
     <div className="screen lobby">
@@ -15,37 +16,47 @@ export default function Lobby({ onStart }) {
 
       <div className="lobby__grid">
         <section className="card">
-          <h2 className="card__title">Players <span className="pill">{PLAYERS.length}/12</span></h2>
+          <h2 className="card__title">Players <span className="pill">{players.length}/12</span></h2>
           <ul className="players">
-            {PLAYERS.map((p) => (
+            {players.map((p) => (
               <li key={p.id}>
                 <Avatar player={p} />
                 <span className="players__name">{p.name}</span>
-                {p.host && <span className="pill pill--host">HOST</span>}
-                {p.id === ME.id && <span className="muted small">(you)</span>}
+                {p.id === hostId && <span className="pill pill--host">HOST</span>}
+                {p.id === me.id && <span className="muted small">(you)</span>}
               </li>
             ))}
           </ul>
-          <button className="btn btn--ghost">Invite to Activity</button>
+          <label className="field">
+            <span>Your name</span>
+            <input
+              className="name-input"
+              value={name}
+              maxLength={20}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            />
+          </label>
         </section>
 
         <section className="card">
           <h2 className="card__title">Settings</h2>
           <label className="field">
             <span>Rounds</span>
-            <select value={settings.rounds} onChange={set('rounds')} disabled={!ME.host}>
+            <select value={settings.rounds} onChange={set('rounds')} disabled={!isHost}>
               {[3, 4, 5, 6, 8, 10].map((n) => <option key={n}>{n}</option>)}
             </select>
           </label>
           <label className="field">
             <span>Time to write</span>
-            <select value={settings.promptSeconds} onChange={set('promptSeconds')} disabled={!ME.host}>
+            <select value={settings.promptSeconds} onChange={set('promptSeconds')} disabled={!isHost}>
               {[30, 45, 60, 90].map((n) => <option key={n} value={n}>{n}s</option>)}
             </select>
           </label>
           <label className="field">
             <span>Time to guess</span>
-            <select value={settings.guessSeconds} onChange={set('guessSeconds')} disabled={!ME.host}>
+            <select value={settings.guessSeconds} onChange={set('guessSeconds')} disabled={!isHost}>
               {[30, 45, 60, 90].map((n) => <option key={n} value={n}>{n}s</option>)}
             </select>
           </label>
@@ -56,7 +67,7 @@ export default function Lobby({ onStart }) {
                 <button
                   key={s}
                   className={`chip ${settings.artStyle === s ? 'is-on' : ''}`}
-                  onClick={() => ME.host && setSettings({ ...settings, artStyle: s })}
+                  onClick={() => isHost && onSettings({ ...settings, artStyle: s })}
                 >{s}</button>
               ))}
             </div>
@@ -65,9 +76,11 @@ export default function Lobby({ onStart }) {
       </div>
 
       <div className="lobby__cta">
-        {ME.host
-          ? <button className="btn btn--primary btn--lg" onClick={onStart}>Start game</button>
-          : <p className="muted">Waiting for the host to start…</p>}
+        {!isHost
+          ? <p className="muted">Waiting for the host to start…</p>
+          : players.length < 2
+            ? <p className="muted">Need at least 2 players to start.</p>
+            : <button className="btn btn--primary btn--lg" onClick={onStart}>Start game</button>}
       </div>
     </div>
   )
