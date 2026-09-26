@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getSession, savedName, websocketUrl } from './session.js'
+import { getSession, websocketUrl } from './session.js'
 
 // Keeps a WebSocket to the game server open and exposes the latest room state.
 export function useRoom() {
@@ -31,7 +31,7 @@ export function useRoom() {
       ws.onopen = () => {
         if (stopped) return ws.close()
         retry = 0
-        ws.send(JSON.stringify(hello.discord ? hello : { ...hello, name: savedName() }))
+        ws.send(JSON.stringify(hello))
       }
       ws.onmessage = (e) => {
         if (stopped) return

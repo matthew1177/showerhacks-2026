@@ -1,11 +1,8 @@
-import { useState } from 'react'
 import { Avatar } from '../components/ui'
 import { ART_STYLES } from '../mock'
 
-export default function Lobby({ players, me, isHost, hostId, settings, onSettings, onName, onStart }) {
-  const [name, setName] = useState(me.name)
+export default function Lobby({ players, me, isHost, hostId, settings, onSettings, onStart }) {
   const set = (k) => (e) => onSettings({ ...settings, [k]: e.target.value })
-  const commitName = () => name.trim() && name.trim() !== me.name ? onName(name.trim()) : setName(me.name)
 
   return (
     <div className="screen lobby">
@@ -27,17 +24,6 @@ export default function Lobby({ players, me, isHost, hostId, settings, onSetting
               </li>
             ))}
           </ul>
-          <label className="field">
-            <span>Your name</span>
-            <input
-              className="name-input"
-              value={name}
-              maxLength={20}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={commitName}
-              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-            />
-          </label>
         </section>
 
         <section className="card">

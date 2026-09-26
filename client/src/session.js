@@ -4,14 +4,6 @@ const CLIENT_ID = import.meta.env?.VITE_DISCORD_CLIENT_ID || '155347071130835362
 let sessionPromise
 let guestId
 
-export function savedName() {
-  try { return localStorage.getItem('name') ?? '' } catch { return '' }
-}
-
-export function saveName(name) {
-  try { localStorage.setItem('name', name) } catch { /* private mode */ }
-}
-
 function playerId() {
   if (guestId) return guestId
   try {
@@ -41,7 +33,7 @@ export async function initializeSession({
 } = {}) {
   const params = new URLSearchParams(location.search)
   if (!params.has('frame_id')) {
-    return { type: 'hello', room: params.get('room') ?? 'default', id: playerId(), name: savedName() }
+    return { type: 'hello', room: params.get('room') ?? 'default', id: playerId() }
   }
 
   const discord = createDiscord()
@@ -66,7 +58,7 @@ export async function initializeSession({
       response_type: 'code',
       state: '',
       prompt: 'none',
-      scope: ['identify'],
+      scope: discord.guildId ? ['identify', 'guilds.members.read'] : ['identify'],
     })
     code = authorization.code
   } catch (error) {
@@ -102,7 +94,10 @@ export async function initializeSession({
 
   // The server verifies this token and supplies the player ID/name itself.
   // Keep credentials in memory; never put them in a URL or browser storage.
-  return { type: 'hello', discord: { instanceId: discord.instanceId, accessToken: data.access_token } }
+  return {
+    type: 'hello',
+    discord: { instanceId: discord.instanceId, guildId: discord.guildId ?? null, accessToken: data.access_token },
+  }
 }
 
 export function getSession() {

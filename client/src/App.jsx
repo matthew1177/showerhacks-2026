@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useRoom } from './net'
-import { saveName } from './session'
 import Guess from './screens/Guess'
 import Lobby from './screens/Lobby'
 import Prompt from './screens/Prompt'
@@ -51,7 +50,6 @@ export default function App() {
           hostId={state.hostId}
           settings={state.settings}
           onSettings={(settings) => send('settings', { settings })}
-          onName={(name) => (saveName(name), send('name', { name }))}
           onStart={() => send('start')}
         />
       )}

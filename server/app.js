@@ -10,6 +10,8 @@ import { getImage } from './images.js'
 
 const DIST = fileURLToPath(new URL('../client/dist/', import.meta.url))
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' }
+// Only Discord's public avatar paths can be fetched through this endpoint.
+const AVATAR_PATH = /^(?:avatars\/\d{1,20}\/(?:a_)?[a-f0-9]{32}|guilds\/\d{1,20}\/users\/\d{1,20}\/avatars\/(?:a_)?[a-f0-9]{32}|embed\/avatars\/[0-5])\.png$/
 
 function json(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
@@ -37,7 +39,7 @@ function requestPath(url) {
   return new URL(url, 'http://localhost').pathname.replace(/^\/\.proxy(?=\/)/, '')
 }
 
-export function createGameServer({ discord = createDiscordAuth(), frontend } = {}) {
+export function createGameServer({ discord = createDiscordAuth(), frontend, fetchAvatar = fetch } = {}) {
   const rooms = new Map()
   const server = createServer(async (req, res) => {
     try {
@@ -51,6 +53,32 @@ export function createGameServer({ discord = createDiscordAuth(), frontend } = {
         return res.end(png)
       }
       if (pathname === '/api' && req.method === 'GET') return json(res, 200, { status: 'ok' })
+      if (pathname.startsWith('/api/avatars/')) {
+        if (req.method !== 'GET') {
+          res.setHeader('Allow', 'GET')
+          return json(res, 405, { error: 'Use GET to load an avatar.' })
+        }
+        const path = pathname.slice('/api/avatars/'.length)
+        if (!AVATAR_PATH.test(path)) return json(res, 404, { error: 'Unknown avatar.' })
+        try {
+          const avatar = await fetchAvatar(`https://cdn.discordapp.com/${path}?size=128`, {
+            signal: AbortSignal.timeout(10_000),
+            redirect: 'error',
+          })
+          if (!avatar.ok || avatar.headers.get('content-type')?.split(';')[0] !== 'image/png') {
+            return json(res, avatar.status === 404 ? 404 : 502, { error: 'Avatar unavailable.' })
+          }
+          const body = Buffer.from(await avatar.arrayBuffer())
+          res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Cache-Control': 'public, max-age=86400, immutable',
+            'X-Content-Type-Options': 'nosniff',
+          })
+          return res.end(body)
+        } catch {
+          return json(res, 502, { error: 'Avatar unavailable.' })
+        }
+      }
       if (pathname === '/api/token') {
         if (req.method !== 'POST') {
           res.setHeader('Allow', 'POST')
@@ -111,20 +139,20 @@ export function createGameServer({ discord = createDiscordAuth(), frontend } = {
         joining = true
         try {
           let code = typeof msg.room === 'string' && /^[\w-]{1,64}$/.test(msg.room) ? msg.room : 'default'
-          let identity = { id: msg.id, name: msg.name }
+          let identity = { id: msg.id }
           if ('discord' in msg) {
             const instanceId = msg.discord?.instanceId
             if (typeof instanceId !== 'string' || !/^[\w-]{1,128}$/.test(instanceId)) {
               throw new DiscordError('Invalid Activity room. Close and reopen the Activity.')
             }
-            identity = await discord.identify(msg.discord?.accessToken)
+            identity = await discord.identify(msg.discord?.accessToken, msg.discord?.guildId)
             // Browser room codes cannot enter this namespace or claim a Discord seat.
             code = `discord:${instanceId}`
           }
           if (ws.readyState !== WebSocket.OPEN) return
           const target = rooms.get(code) ?? new Room(code)
           rooms.set(code, target)
-          playerId = target.join(ws, identity.id, identity.name)
+          playerId = target.join(ws, identity.id, identity.name, identity.avatarUrl)
           if (!playerId) {
             if (target.empty) rooms.delete(code)
             ws.send(JSON.stringify({ type: 'error', message: 'This room is full.' }))

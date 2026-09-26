@@ -3,13 +3,17 @@ import { placeholderImage } from '../mock'
 import { backendUrl } from '../session'
 
 export function Avatar({ player, size = 32 }) {
+  const [failedUrl, setFailedUrl] = useState(null)
+  const src = player.avatarUrl ? backendUrl(player.avatarUrl).href : null
   return (
     <span
       className="avatar"
       style={{ width: size, height: size, background: player.color, fontSize: size * 0.42 }}
       title={player.name}
     >
-      {player.name[0].toUpperCase()}
+      {src && src !== failedUrl
+        ? <img src={src} alt="" width={size} height={size} onError={() => setFailedUrl(src)} />
+        : [...player.name][0]?.toUpperCase()}
     </span>
   )
 }

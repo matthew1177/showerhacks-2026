@@ -1,5 +1,14 @@
 const API = 'https://discord.com/api/v10'
 
+function avatarUrl(user, guildId, memberAvatar) {
+  if (memberAvatar) return `/api/avatars/guilds/${guildId}/users/${user.id}/avatars/${memberAvatar}.png`
+  if (user.avatar) return `/api/avatars/avatars/${user.id}/${user.avatar}.png`
+  const index = user.discriminator && user.discriminator !== '0'
+    ? Number(user.discriminator) % 5
+    : Number((BigInt(user.id) >> 22n) % 6n)
+  return `/api/avatars/embed/avatars/${index}.png`
+}
+
 export class DiscordError extends Error {
   constructor(message, status = 401) {
     super(message)
@@ -57,15 +66,30 @@ export function createDiscordAuth({
       return { access_token: token.access_token }
     },
 
-    async identify(accessToken) {
+    async identify(accessToken, guildId) {
       if (typeof accessToken !== 'string' || !accessToken || accessToken.length > 4096) {
         throw new DiscordError('Discord sign-in is required. Close and reopen the Activity.')
       }
-      const auth = await request('/oauth2/@me', { headers: { Authorization: `Bearer ${accessToken}` } })
+      if (guildId != null && (typeof guildId !== 'string' || !/^\d{1,20}$/.test(guildId))) {
+        throw new DiscordError('Invalid Discord server. Close and reopen the Activity.')
+      }
+      const headers = { Authorization: `Bearer ${accessToken}` }
+      const auth = await request('/oauth2/@me', { headers })
       if (auth.application?.id !== clientId || !auth.scopes?.includes('identify') || !/^\d{1,20}$/.test(auth.user?.id)) {
         throw new DiscordError('Discord sign-in could not be verified. Close and reopen the Activity.')
       }
-      return { id: `discord:${auth.user.id}`, name: auth.user.global_name || auth.user.username }
+      let name = auth.user.global_name || auth.user.username
+      let memberAvatar
+      if (guildId != null) {
+        if (!auth.scopes.includes('guilds.members.read')) {
+          throw new DiscordError('Discord nickname access is required. Close and reopen the Activity to authorize it.')
+        }
+        // Read the nickname from Discord, never from the joining client's name fields.
+        const member = await request(`/users/@me/guilds/${guildId}/member`, { headers })
+        if (typeof member.nick === 'string' && member.nick.trim()) name = member.nick
+        memberAvatar = member.avatar
+      }
+      return { id: `discord:${auth.user.id}`, name, avatarUrl: avatarUrl(auth.user, guildId, memberAvatar) }
     },
   }
 }

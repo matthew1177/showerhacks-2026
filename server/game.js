@@ -11,7 +11,7 @@ const TIME_OPTIONS = [30, 45, 60, 90]
 
 export const MAX_PLAYERS = 12
 const MAX_TEXT = 120
-const MAX_NAME = 20
+const MAX_NAME = 32
 const GRACE_MS = 1000 // extra time for last-second drafts to arrive
 const TIMED_OUT = '(ran out of time)'
 
@@ -20,7 +20,7 @@ const clean = (s, max) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim()
 export class Room {
   constructor(code) {
     this.code = code
-    this.players = [] // { id, name, color, connected }
+    this.players = [] // { id, name, avatarUrl, color, connected }
     this.sockets = new Map() // playerId -> ws
     this.hostId = null
     this.settings = { rounds: 6, promptSeconds: 60, guessSeconds: 45, artStyle: 'Any' }
@@ -37,19 +37,23 @@ export class Room {
 
   // ---------- connections ----------
 
-  join(ws, id, name) {
+  join(ws, id, name, avatarUrl = null) {
     let player = this.players.find((p) => p.id === id)
+    const displayName = typeof name === 'string' ? [...name.trim()].slice(0, MAX_NAME).join('') : ''
     if (!player) {
       if (this.players.length >= MAX_PLAYERS) return null
       const used = new Set(this.players.map((p) => p.color))
       player = {
         id: typeof id === 'string' && id.length <= 64 ? id : randomUUID(),
-        name: clean(name, MAX_NAME) || `Player ${this.players.length + 1}`,
+        name: displayName || `Player ${this.players.length + 1}`,
         color: COLORS.find((c) => !used.has(c)) ?? COLORS[this.players.length % COLORS.length],
         connected: true,
       }
       this.players.push(player)
     }
+    // Refresh the verified Discord profile when recovering an existing seat.
+    if (displayName) player.name = displayName
+    player.avatarUrl = avatarUrl
     // Same player opened a second tab: the new connection wins.
     this.sockets.get(player.id)?.close(4000, 'replaced')
     this.sockets.set(player.id, ws)
@@ -90,12 +94,6 @@ export class Room {
   handle(id, msg) {
     const isHost = id === this.hostId
     switch (`${this.phase}:${msg.type}`) {
-      case 'lobby:name': {
-        const name = clean(msg.name, MAX_NAME)
-        const player = this.players.find((p) => p.id === id)
-        if (name && player) player.name = name
-        break
-      }
       case 'lobby:settings':
         if (isHost) this.updateSettings(msg.settings ?? {})
         break

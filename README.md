@@ -14,7 +14,7 @@ npm run dev
 ```
 
 Open `http://localhost:5173/?room=friends` in multiple independent tabs to play.
-Browser players use a per-tab identity and can choose a name. Everyone with the
+Browser players use a per-tab identity and an assigned name such as `Player 1`. Everyone with the
 same room code joins together; omitting the code uses `default`. Browser play
 does not require Discord credentials.
 
@@ -27,6 +27,7 @@ relative `/api` URLs; there is no separate frontend port or backend host to conf
 | `/` | React app |
 | `/api` | JSON status (`{ "status": "ok" }`) |
 | `/api/token` | Discord OAuth code exchange (POST) |
+| `/api/avatars/...` | Discord profile pictures (GET) |
 | `/api/ws` | Multiplayer WebSocket |
 
 `PORT` changes the port for both the frontend and backend. The old `/ws` endpoint
@@ -57,20 +58,30 @@ The existing Application ID is `1553470711308353626`.
    `https://`. Use one mapping for the frontend, authentication, and WebSocket.
    The Node server handles the app and `/api` on port 5173. If the tunnel hostname
    changes, update the mapping.
-6. Launch the Activity from Discord's App Launcher and authorize basic identity
-   access. Have another tester join the **same running Activity**. Both players
-   should appear in one lobby with their Discord display names.
+6. Launch the Activity from Discord's App Launcher and authorize identity and
+   server member access. Have another tester join the **same running Activity**.
+   Both players should appear in one lobby with their Discord server nicknames
+   (falling back to their display names, then usernames).
 
-The client waits for the SDK, requests only `identify`, exchanges its authorization
-code through the server, and authenticates with Discord. It connects to
+The client waits for the SDK, requests `identify` plus `guilds.members.read` when
+launched in a Discord server, exchanges its authorization code through the server,
+and authenticates with Discord. Direct-message Activities only need `identify`.
+It connects to
 `wss://<activity-origin>/.proxy/api/ws`; the token endpoint is `/.proxy/api/token`.
-The server verifies the token with Discord before accepting a player. Access
+The server verifies the token with Discord and reads the current user's server
+nickname through the [current-user guild member endpoint](https://docs.discord.com/developers/resources/user#get-current-user-guild-member)
+before accepting a player. Access
 tokens stay in memory and are sent in the initial WebSocket message, not in URLs.
 
 Rooms use the Activity instance ID, so separate Activities cannot accidentally
 share the browser's default lobby. Discord users keep the same player identity
-on reconnect; opening a second connection replaces the old one. A nickname can
-still be changed in the lobby. Room state lives in server memory and is removed
+on reconnect; opening a second connection replaces the old one. Names cannot be
+edited in the game. Change your nickname in Discord and reopen the Activity to
+refresh it; direct-message Activities use your display name or username.
+Avatars use your server profile picture when set, then your account picture or
+Discord's default avatar. They load through the shared server using the existing
+Activity URL mapping. Browser guests and failed image loads show initials.
+Room state lives in server memory and is removed
 when everyone leaves or the server restarts.
 
 If sign-in fails, the app displays the cause instead of joining a guest lobby.

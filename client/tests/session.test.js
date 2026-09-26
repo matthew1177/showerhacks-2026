@@ -6,6 +6,7 @@ const embedded = new URL('https://1553470711308353626.discordsays.com/?frame_id=
 
 test('Discord uses secure proxied endpoints; browser previews use normal endpoints', () => {
   assert.equal(backendUrl('/api/token', embedded).href, `${embedded.origin}/.proxy/api/token`)
+  assert.equal(backendUrl('/api/avatars/embed/avatars/0.png', embedded).href, `${embedded.origin}/.proxy/api/avatars/embed/avatars/0.png`)
   assert.equal(websocketUrl(embedded), 'wss://1553470711308353626.discordsays.com/.proxy/api/ws')
   assert.equal(websocketUrl(new URL('http://localhost:5173/?room=friends')), 'ws://localhost:5173/api/ws')
   assert.equal(websocketUrl(new URL('https://example.com/')), 'wss://example.com/api/ws')
@@ -24,42 +25,46 @@ test('browser sessions retain a guest seat without invoking Discord or requiring
   assert.ok(first.id)
   assert.equal(first.id, second.id)
   assert.equal(first.discord, undefined)
+  assert.equal(first.name, undefined)
 })
 
-test('Activity handshake waits for SDK readiness, authenticates, and uses its instance', async () => {
-  const calls = []
-  let makeReady
-  const ready = new Promise((resolve) => { makeReady = resolve })
-  const result = initializeSession({
-    location: embedded,
-    createDiscord: () => ({
-      instanceId: 'activity-one',
-      ready: () => ready,
-      commands: {
-        authorize: async (args) => {
-          assert.deepEqual(args.scope, ['identify'])
-          calls.push('authorize')
-          return { code: 'test-code' }
+for (const guildId of ['999', null]) {
+  test(`Activity handshake uses its instance and requests nickname access only in a server (${guildId})`, async () => {
+    const calls = []
+    let makeReady
+    const ready = new Promise((resolve) => { makeReady = resolve })
+    const result = initializeSession({
+      location: embedded,
+      createDiscord: () => ({
+        instanceId: 'activity-one',
+        guildId,
+        ready: () => ready,
+        commands: {
+          authorize: async (args) => {
+            assert.deepEqual(args.scope, guildId ? ['identify', 'guilds.members.read'] : ['identify'])
+            calls.push('authorize')
+            return { code: 'test-code' }
+          },
+          authenticate: async (args) => {
+            assert.deepEqual(args, { access_token: 'test-access' })
+            calls.push('authenticate')
+            return { user: { id: '123' } }
+          },
         },
-        authenticate: async (args) => {
-          assert.deepEqual(args, { access_token: 'test-access' })
-          calls.push('authenticate')
-          return { user: { id: '123' } }
-        },
+      }),
+      fetchToken: async (url, options) => {
+        assert.equal(url.pathname, '/.proxy/api/token')
+        assert.deepEqual(JSON.parse(options.body), { code: 'test-code' })
+        calls.push('exchange')
+        return Response.json({ access_token: 'test-access' })
       },
-    }),
-    fetchToken: async (url, options) => {
-      assert.equal(url.pathname, '/.proxy/api/token')
-      assert.deepEqual(JSON.parse(options.body), { code: 'test-code' })
-      calls.push('exchange')
-      return Response.json({ access_token: 'test-access' })
-    },
+    })
+    assert.deepEqual(calls, [])
+    makeReady()
+    assert.deepEqual(await result, { type: 'hello', discord: { instanceId: 'activity-one', guildId, accessToken: 'test-access' } })
+    assert.deepEqual(calls, ['authorize', 'exchange', 'authenticate'])
   })
-  assert.deepEqual(calls, [])
-  makeReady()
-  assert.deepEqual(await result, { type: 'hello', discord: { instanceId: 'activity-one', accessToken: 'test-access' } })
-  assert.deepEqual(calls, ['authorize', 'exchange', 'authenticate'])
-})
+}
 
 test('OAuth failures surface the server error instead of joining a guest room', async () => {
   await assert.rejects(initializeSession({
