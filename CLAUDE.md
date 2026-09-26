@@ -1,4 +1,4 @@
-# showerhacks-2026
+# showerhacks-2026 (Unprompted)
 
 ## Standing instruction
 Anything the user says about the project should be recorded in this file so it persists across sessions.
@@ -12,8 +12,8 @@ A Gartic Phone–style party game, but with an AI image model doing the drawing:
 5. At the end, every chain is revealed step by step (prompt → image → guess → image → …).
 
 ## Platform
-- Must be **Discord friendly**: intended to run as a Discord Activity (embedded iframe via the Discord Embedded App SDK), so the UI has to work at small/odd sizes (PiP, mobile portrait) and avoid loading external resources directly (Discord's CSP only allows proxied URLs under `/.proxy/`), so no web fonts or CDN assets.
-- The user requested [Catppuccin colors](https://github.com/catppuccin/catppuccin) for the UI, replacing the original Discord palette. The current theme uses **Mocha** with mauve accents; shared color tokens live in `client/src/index.css`.
+- Must be **Discord friendly**: intended to run as a Discord Activity (embedded iframe via the Discord Embedded App SDK), so the UI has to work at small/odd sizes (PiP, mobile portrait) and avoid loading external resources directly (Discord's CSP only allows proxied URLs under `/.proxy/`), so no externally hosted fonts or CDN assets (bundle them instead).
+- The game is named **Unprompted** (formerly PromptPhone). The user supplied a design kit (stylesheet, wordmark markup, favicon) that replaced the earlier Catppuccin Mocha theme: warm paper background with a dot grid, ink text, chunky 2.5px ink borders with hard offset shadows, tomato primary, sticky-note yellow, grape focus rings. Tokens (`--u-*`, plus `--player-*` for the server's player colour names) live in `client/src/index.css`; the `Wordmark` component is in `client/src/components/ui.jsx`; the favicon is `client/public/favicon.svg`. Fonts (Bricolage Grotesque, Figtree, Caveat) are bundled via `@fontsource` packages imported in `client/src/main.jsx` instead of Google Fonts, to satisfy Discord's CSP.
 - Frontend: **React** (Vite) in `client/`.
 - The user requested a summary of how the game could become a Discord app for voice calls.
 - For this Discord setup task, the user deferred game server and image model work to focus on getting the UI to appear and open as a Discord Activity. Remote updates subsequently added the multiplayer backend described below.

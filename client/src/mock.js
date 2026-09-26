@@ -10,14 +10,14 @@ export const PROMPT_IDEAS = [
   'a haunted vending machine at 3am',
 ]
 
-// Stand-in for a generated image: a seeded Catppuccin gradient so each step looks different.
+// Stand-in for a generated image: a seeded gradient in the player colours so each step looks different.
 const IMAGE_COLORS = ['mauve', 'pink', 'peach', 'yellow', 'green', 'teal', 'blue', 'lavender']
 
 export function placeholderImage(seed) {
   let h = 0
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) % 360
-  const color = (offset) => `var(--ctp-${IMAGE_COLORS[(h + offset) % IMAGE_COLORS.length]})`
+  const color = (offset) => `var(--player-${IMAGE_COLORS[(h + offset) % IMAGE_COLORS.length]})`
   return `radial-gradient(circle at 30% 30%, ${color(0)}, transparent 55%),
     radial-gradient(circle at 75% 70%, ${color(3)}, transparent 50%),
-    linear-gradient(135deg, var(--ctp-surface0), var(--ctp-crust))`
+    linear-gradient(135deg, var(--u-paper), var(--u-tomato-soft))`
 }

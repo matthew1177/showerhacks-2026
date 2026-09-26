@@ -47,7 +47,7 @@ function Chain({ reveal, playersById, isHost, onNext, onLobby }) {
             <div key={i} className="msg">
               <Avatar player={player} size={40} />
               <div className="msg__body">
-                <div className="msg__name" style={{ color: player.color }}>
+                <div className="msg__name">
                   {player.name}
                   <span className="muted small">{step.kind === 'prompt' ? 'wrote' : 'guessed'}</span>
                   {step.score !== undefined && (
@@ -109,7 +109,7 @@ function Leaderboard({ entries, playersById, isHost, onLobby }) {
               <li key={entry.playerId} className={rank === 1 ? 'is-winner' : ''} style={{ animationDelay: `${i * 80}ms` }}>
                 <span className="leaderboard__rank">{rank === 1 ? '👑' : rank}</span>
                 <Avatar player={player} size={36} />
-                <span className="leaderboard__name" style={{ color: player.color }}>{player.name}</span>
+                <span className="leaderboard__name">{player.name}</span>
                 <span className="muted small">{entry.guesses} {entry.guesses === 1 ? 'guess' : 'guesses'}</span>
                 <strong className="leaderboard__points">{entry.points}</strong>
               </li>

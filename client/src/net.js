@@ -42,7 +42,7 @@ export function useRoom() {
           // msLeft -> local deadline, so the timer doesn't depend on client/server clocks agreeing.
           // msLeft is null while images are generating (timer not started yet).
           if (msg.state.play) msg.state.play.endsAt = msg.state.play.msLeft == null ? null : Date.now() + msg.state.play.msLeft
-          msg.state.players = msg.state.players.map((p) => ({ ...p, color: `var(--ctp-${p.color})` }))
+          msg.state.players = msg.state.players.map((p) => ({ ...p, color: `var(--player-${p.color})` }))
           const me = msg.state.players.find((p) => p.id === msg.state.me)
           if (msg.state.canEditName && me) saveName(me.name)
           setState(msg.state)

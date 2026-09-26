@@ -2,6 +2,19 @@ import { useEffect, useState } from 'react'
 import { placeholderImage } from '../mock'
 import { backendUrl } from '../session'
 
+// Size it with the --wordmark-size CSS variable; everything inside scales in em.
+export function Wordmark() {
+  return (
+    <h1 className="wordmark" aria-label="unprompted">
+      <span className="wordmark__un" aria-hidden="true">un</span>
+      <svg className="wordmark__caret" viewBox="0 0 30 34" aria-hidden="true">
+        <path d="M4 30 L15 5 L26 30" fill="none" stroke="#FF5B2E" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="wordmark__word" aria-hidden="true">prompted</span>
+    </h1>
+  )
+}
+
 export function Avatar({ player, size = 32 }) {
   const [failedUrl, setFailedUrl] = useState(null)
   const src = player.avatarUrl ? backendUrl(player.avatarUrl).href : null

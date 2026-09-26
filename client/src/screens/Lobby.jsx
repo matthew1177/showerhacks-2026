@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Avatar } from '../components/ui'
+import { Avatar, Wordmark } from '../components/ui'
 import { ART_STYLES } from '../mock'
 
 const creativityLabel = (n) => (n < 35 ? 'Literal' : n < 63 ? 'Balanced' : n < 88 ? 'Creative' : 'Wild')
@@ -16,7 +16,7 @@ export default function Lobby({ players, me, isHost, hostId, settings, onSetting
   return (
     <div className="screen lobby">
       <div className="lobby__hero">
-        <h1 className="logo">Prompt<span>Phone</span></h1>
+        <Wordmark />
         <p className="muted">Write a prompt. The AI draws it. Your friends guess what you wrote.</p>
       </div>
 
@@ -25,13 +25,14 @@ export default function Lobby({ players, me, isHost, hostId, settings, onSetting
           <h2 className="card__title">Players <span className="pill">{players.length}/12</span></h2>
           <ul className="players">
             {players.map((p) => (
-              <li key={p.id}>
+              <li key={p.id} className={p.id === me.id ? 'is-you' : ''}>
                 <Avatar player={p} />
                 <span className="players__name">{p.name}</span>
                 {p.id === hostId && <span className="pill pill--host">HOST</span>}
-                {p.id === me.id && <span className="muted small">(you)</span>}
+                {p.id === me.id && <span className="scribble">that's you</span>}
               </li>
             ))}
+            {players.length < 2 && <li className="is-empty">Empty seat. Send someone the link.</li>}
           </ul>
           {onName && (
             <label className="field">
@@ -52,7 +53,7 @@ export default function Lobby({ players, me, isHost, hostId, settings, onSetting
               ? <p className="muted">Waiting for the host to start…</p>
               : players.length < 2
                 ? <p className="muted">Need at least 2 players to start.</p>
-                : <button className="btn btn--primary btn--lg" onClick={onStart}>Start game</button>}
+                : <button className="btn btn--primary btn--lg" onClick={onStart}>Jump in</button>}
           </div>
         </section>
 
