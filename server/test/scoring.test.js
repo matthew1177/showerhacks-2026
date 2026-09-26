@@ -7,6 +7,7 @@ function mockImageApi(t) {
   const env = { IMAGE_API_URL: process.env.IMAGE_API_URL, IMAGE_API_SECRET: process.env.IMAGE_API_SECRET }
   Object.assign(process.env, { IMAGE_API_URL: 'http://image-api.test', IMAGE_API_SECRET: 'image-api-test-secret' })
   t.mock.method(globalThis, 'fetch', async (url, { body }) => {
+    if (url.endsWith('/prepare')) return Response.json({ ready: true })
     if (url.endsWith('/generate')) return new Response(JSON.parse(body).prompt)
     const text = String(body)
     return Response.json({ embedding: text.includes('cat') ? [1, 0, 0] : text.includes('car') ? [0, 1, 0] : [0, 0, 1] })

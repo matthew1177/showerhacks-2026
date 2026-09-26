@@ -2,7 +2,7 @@
 
 A multiplayer prompt-and-guess game for the web and Discord Activities. React/Vite
 is in `client/`; the Node server in `server/` owns rooms and game state. An optional
-local Chroma1-HD service generates images; gradient placeholders are used when
+local Chroma Flash / SDXL-Turbo service generates images; gradient placeholders are used when
 the service is disabled or generation fails.
 
 ## Run locally
@@ -73,7 +73,13 @@ the game server. It listens only on `127.0.0.1:8000`; the game server authentica
 requests and serves generated PNGs through `/images/`, including Discord's
 `/.proxy` route. The next guessing timer starts after all images are ready.
 
-Images default to 384×384 with six sampling steps and `IMAGE_FLASH=1`. This trades
+Before starting a game, the host chooses **Chroma Flash** (the default) or
+**SDXL-Turbo** under **Settings → Image model**. Everyone sees the choice, and it
+stays fixed through every round and final scoring. The server starts loading the
+chosen model while players write their first prompts. The local image playground
+offers the same choices.
+
+Chroma Flash defaults to 384×384 with six sampling steps. This trades
 resolution and detail for short game turns while keeping Chroma. On Apple Silicon,
 the service uses float16, shorter text padding, Metal fast math, and synchronization
 between sampling steps to keep the GPU queue from building up. Explicit
@@ -84,9 +90,19 @@ style took **5.9–6.6 seconds each** through `/api/image-test` after startup (S
 26, 2026). The average was 6.24 seconds, including PNG encoding and the HTTP response.
 This is a local measurement, not a guaranteed deadline on other hardware or under load.
 
-Set `IMAGE_SIZE` (a multiple of 16, at least 256) and `IMAGE_STEPS` in `imagegen/.env`
-to adjust speed and quality, then restart the image service. For the original HD
-mode, set `IMAGE_FLASH=0`, `IMAGE_SIZE=512`, and `IMAGE_STEPS=20`; it is much slower.
+The [SDXL-Turbo model](https://huggingface.co/stabilityai/sdxl-turbo) uses 512×512,
+one sampling step, and guidance disabled. Its weights download on first use
+(roughly 14 GB). Only one image pipeline stays resident; switching models reloads
+and warms the selected pipeline. Concurrent rooms using different models can
+therefore add loading time when their requests alternate.
+
+Set `IMAGE_FLASH_SIZE` / `IMAGE_FLASH_STEPS` or `IMAGE_TURBO_SIZE` /
+`IMAGE_TURBO_STEPS` in `imagegen/.env` to adjust each profile, then restart the
+image service. Sizes must be multiples of 16 and at least 256. `IMAGE_MODEL`
+selects the service's startup default; games always pass their lobby selection.
+Legacy `IMAGE_SIZE` / `IMAGE_STEPS` overrides affect only the service default.
+For scripts using original Chroma HD, `IMAGE_MODEL=chroma-hd` retains 512×512 / 20
+steps; `IMAGE_FLASH=0` is also supported when `IMAGE_MODEL` is unset.
 Flash mode disables classifier-free guidance and negative prompting as required
 by the adapter. Startup/download time and time spent waiting behind other requests
 are separate from per-image generation time; hardware and competing GPU work affect latency.
@@ -97,7 +113,7 @@ Existing art-style and creativity settings still apply.
 ### Test a single image
 
 Open [the image playground](http://localhost:5173/image-test) while the game and
-image servers are running. Enter a prompt, choose an art style and creativity,
+image servers are running. Enter a prompt, choose a model, art style and creativity,
 then generate, preview, or save a PNG without starting a multiplayer game.
 The page checks model readiness automatically and shows elapsed generation time.
 Its API is available only through a direct localhost connection; it is not

@@ -7,6 +7,7 @@ import { WebSocket, WebSocketServer } from 'ws'
 import { Room } from './game.js'
 import { createDiscordAuth, DiscordError } from './discord.js'
 import { deleteImage, generateImage, getImage, imagesEnabled, imageServiceStatus } from './images.js'
+import IMAGE_MODELS from '../shared/image-models.json' with { type: 'json' }
 
 const DIST = fileURLToPath(new URL('../client/dist/', import.meta.url))
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' }
@@ -75,6 +76,10 @@ export function createGameServer({ discord = createDiscordAuth(), frontend, fetc
         const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : ''
         const style = body?.style ?? 'Any'
         const creativity = body?.creativity ?? 50
+        const model = body?.model
+        if (model !== undefined && !IMAGE_MODELS.some((choice) => choice.id === model)) {
+          return json(res, 422, { error: 'Choose Chroma Flash or SDXL-Turbo.' })
+        }
         if (!prompt || prompt.length > 200 || !['Any', 'Photo', 'Cartoon', 'Pixel art', 'Oil painting', 'Claymation'].includes(style)
           || !Number.isInteger(creativity) || creativity < 0 || creativity > 100) {
           return json(res, 422, { error: 'Enter a prompt of 1–200 characters, a valid art style, and creativity from 0–100.' })
@@ -84,7 +89,7 @@ export function createGameServer({ discord = createDiscordAuth(), frontend, fetc
         testingImage = true
         const started = Date.now()
         try {
-          const id = await generateImage(prompt, style, creativity)
+          const id = await generateImage(prompt, style, creativity, model)
           const png = getImage(id)
           deleteImage(id)
           res.writeHead(200, {
@@ -93,7 +98,7 @@ export function createGameServer({ discord = createDiscordAuth(), frontend, fetc
           })
           return res.end(png)
         } catch {
-          return json(res, 503, { error: 'Chroma could not finish this image. Check that the image service is running, then try again.' })
+          return json(res, 503, { error: 'The model could not finish this image. Check that the image service is running, then try again.' })
         } finally {
           testingImage = false
         }

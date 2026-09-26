@@ -1,6 +1,7 @@
-"""Local Chroma1-HD inference. Load and generate on the API's single model worker."""
+"""Local Chroma and SDXL-Turbo inference on the API's single model worker."""
 
 import io
+import gc
 import logging
 import os
 import random
@@ -11,14 +12,9 @@ os.environ.setdefault("PYTORCH_MPS_FAST_MATH", "1")
 os.environ.setdefault("PYTORCH_MPS_PREFER_METAL", "1")
 
 import torch
-from diffusers import ChromaPipeline
+from diffusers import ChromaPipeline, StableDiffusionXLPipeline
+from model_config import model_config
 
-MODEL_ID = "lodestones/Chroma1-HD"
-FLASH = os.environ.get("IMAGE_FLASH", "1") == "1"
-STEPS = int(os.environ.get("IMAGE_STEPS", "6" if FLASH else "20"))
-SIZE = int(os.environ.get("IMAGE_SIZE", "384" if FLASH else "512"))
-if STEPS < 1 or SIZE < 256 or SIZE % 16:
-    raise ValueError("IMAGE_STEPS must be positive; IMAGE_SIZE must be at least 256 and divisible by 16.")
 logger = logging.getLogger("uvicorn.error")
 STYLE_SUFFIX = {
     "Any": "",
@@ -45,18 +41,31 @@ def creative_suffix(creativity: int) -> str:
     return "".join(f", {t}" for t in random.sample(TWISTS, max(twists, 0)))
 
 _pipeline = None
+_active_model = None
 
 
 @torch.inference_mode()
-def load_model():
-    global _pipeline
-    if _pipeline is not None:
-        return
+def load_model(model=None):
+    """Load one selected model on the single worker; never mix fused and HD weights."""
+    global _pipeline, _active_model
+    config = model_config(model)
+    if _pipeline is not None and _active_model == config["id"]:
+        return _pipeline
     device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
+    # A single resident model avoids doubling GPU memory when different rooms
+    # choose different models. Reload pristine weights instead of undoing a fused adapter.
+    _pipeline = None
+    _active_model = None
+    gc.collect()
+    if device == "mps":
+        torch.mps.empty_cache()
+    elif device == "cuda":
+        torch.cuda.empty_cache()
     dtype = {"cpu": torch.float32, "mps": torch.float16, "cuda": torch.bfloat16}[device]
-    logger.info("Loading %s on %s (first run downloads the model weights)", MODEL_ID, device)
-    pipeline = ChromaPipeline.from_pretrained(MODEL_ID, dtype=dtype, use_safetensors=True)
-    if FLASH:
+    logger.info("Loading %s on %s (first run downloads the model weights)", config["label"], device)
+    pipeline_class = StableDiffusionXLPipeline if config["id"] == "sdxl-turbo" else ChromaPipeline
+    pipeline = pipeline_class.from_pretrained(config["repo"], dtype=dtype, use_safetensors=True)
+    if config["flash"]:
         from chroma_flash import fuse_flash_adapter
 
         logger.info("Fusing Chroma Flash adapter")
@@ -64,10 +73,20 @@ def load_model():
     pipeline.to(device)
     pipeline.vae.enable_tiling()
     # Pay for the first GPU kernels at startup, before /health reports ready.
-    logger.info("Warming Chroma up")
-    _render(pipeline, "A red apple on a wooden table", seed=0)
+    logger.info("Warming %s up", config["label"])
+    _render(pipeline, "A red apple on a wooden table", config, seed=0)
     _pipeline = pipeline
-    logger.info("Chroma ready: %sx%s, %s steps, Flash %s", SIZE, SIZE, STEPS, FLASH)
+    _active_model = config["id"]
+    logger.info("%s ready: %sx%s, %s steps", config["label"], config["size"], config["size"], config["steps"])
+    return pipeline
+
+
+def prepare_model(model=None):
+    load_model(model)
+
+
+def active_model():
+    return _active_model
 
 
 def _finish_mps_step(pipeline, step, timestep, callback_kwargs):
@@ -77,33 +96,40 @@ def _finish_mps_step(pipeline, step, timestep, callback_kwargs):
     return callback_kwargs
 
 
-def _render(pipeline, text, seed):
+def _render(pipeline, text, config, seed):
+    options = {
+        "prompt": text,
+        "height": config["size"],
+        "width": config["size"],
+        "num_inference_steps": config["steps"],
+        "generator": torch.Generator("cpu").manual_seed(seed),
+        "callback_on_step_end": _finish_mps_step if pipeline.device.type == "mps" else None,
+    }
+    if config["id"] == "sdxl-turbo":
+        # Turbo uses one step without classifier-free guidance or negative prompts.
+        return pipeline(**options, guidance_scale=0.0).images[0]
     # Short prompts do not need 256 padding tokens. Retain room for long prompts
     # and style/creativity suffixes, including non-English text, without truncating.
     token_count = len(pipeline.tokenizer(text).input_ids)
     sequence_length = max(64, min(512, ((token_count + 63) // 64) * 64))
     return pipeline(
-        prompt=text,
-        negative_prompt=None if FLASH else "blurry, low quality, distorted",
-        height=SIZE,
-        width=SIZE,
-        num_inference_steps=STEPS,
-        guidance_scale=1.0 if FLASH else 3.0,
+        **options,
+        negative_prompt=None if config["flash"] else "blurry, low quality, distorted",
+        guidance_scale=1.0 if config["flash"] else 3.0,
         max_sequence_length=sequence_length,
-        generator=torch.Generator("cpu").manual_seed(seed),
-        callback_on_step_end=_finish_mps_step if pipeline.device.type == "mps" else None,
     ).images[0]
 
 
 @torch.inference_mode()
-def generate(prompt: str, style: str, creativity: int = 50) -> bytes:
+def generate(prompt: str, style: str, creativity: int = 50, model=None) -> bytes:
     """Return PNG bytes for `prompt` in the lobby's art style and creativity."""
-    load_model()
+    config = model_config(model)
+    pipeline = load_model(config["id"])
     started = time.monotonic()
     text = prompt + creative_suffix(creativity) + STYLE_SUFFIX.get(style, "")
-    image = _render(_pipeline, text, random.getrandbits(63))
+    image = _render(pipeline, text, config, random.getrandbits(63))
 
     buf = io.BytesIO()
     image.save(buf, format="PNG")
-    logger.info("Chroma generated an image in %.1fs", time.monotonic() - started)
+    logger.info("%s generated an image in %.1fs", config["label"], time.monotonic() - started)
     return buf.getvalue()

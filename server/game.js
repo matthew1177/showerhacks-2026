@@ -2,7 +2,8 @@
 // clients only receive a per-player view (see `view`) so nobody can peek at other chains.
 
 import { randomUUID } from 'node:crypto'
-import { deleteImage, embedImage, generateImage, imagesEnabled, similarityPoints } from './images.js'
+import { deleteImage, embedImage, generateImage, imagesEnabled, prepareImageModel, similarityPoints } from './images.js'
+import IMAGE_MODELS from '../shared/image-models.json' with { type: 'json' }
 
 const COLORS = ['mauve', 'pink', 'green', 'yellow', 'red', 'blue', 'peach', 'teal', 'lavender', 'rosewater']
 const ART_STYLES = ['Any', 'Photo', 'Cartoon', 'Pixel art', 'Oil painting', 'Claymation']
@@ -26,7 +27,7 @@ export class Room {
     this.players = [] // { id, name, avatarUrl, color, connected }
     this.sockets = new Map() // playerId -> ws
     this.hostId = null
-    this.settings = { rounds: 6, promptSeconds: 60, guessSeconds: 45, artStyle: 'Any', creativity: 50 }
+    this.settings = { rounds: 6, promptSeconds: 60, guessSeconds: 45, artStyle: 'Any', creativity: 50, imageModel: 'chroma-flash' }
     this.phase = 'lobby' // lobby | play | reveal
     this.game = null
     this.reveal = null
@@ -144,6 +145,7 @@ export class Room {
       promptSeconds: pick(s.promptSeconds, TIME_OPTIONS, this.settings.promptSeconds),
       guessSeconds: pick(s.guessSeconds, TIME_OPTIONS, this.settings.guessSeconds),
       artStyle: ART_STYLES.includes(s.artStyle) ? s.artStyle : this.settings.artStyle,
+      imageModel: IMAGE_MODELS.some((model) => model.id === s.imageModel) ? s.imageModel : this.settings.imageModel,
       creativity: Number.isFinite(Number(s.creativity))
         ? Math.min(100, Math.max(0, Math.round(Number(s.creativity))))
         : this.settings.creativity,
@@ -157,6 +159,7 @@ export class Room {
     this.phase = 'play'
     this.game = {
       order,
+      imageModel: this.settings.imageModel,
       // Chains keep rotating when the chosen round count exceeds the player count.
       turns: this.settings.rounds,
       turn: 0,
@@ -169,6 +172,10 @@ export class Room {
       generating: false, // between turns while the image model works; the timer hasn't started
       finishing: false, // after the last turn while its images are made and scored
     }
+    // Load the chosen model while players write; generation uses this same queue.
+    if (imagesEnabled()) prepareImageModel(this.game.imageModel).catch((err) => {
+      console.error('image model preparation failed:', err.message)
+    })
     this.startTurn()
   }
 
@@ -239,7 +246,7 @@ export class Room {
   // to the chain's reference; a prompt's image becomes the reference.
   async renderImage(image, text, chain, step) {
     try {
-      const id = await generateImage(text, this.settings.artStyle, this.settings.creativity)
+      const id = await generateImage(text, this.settings.artStyle, this.settings.creativity, this.game.imageModel)
       if (this.disposed) return deleteImage(id)
       this.imageIds.push(id)
       image.url = `/images/${id}.png`

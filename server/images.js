@@ -19,26 +19,42 @@ export async function imageServiceStatus() {
     if (!response.ok) throw new Error('Image service unavailable')
     return await response.json()
   } catch {
-    return { ready: false, message: 'Chroma is loading or the image service is offline. Checking again automatically.' }
+    return { ready: false, message: 'The image model is loading or the service is offline. Checking again automatically.' }
   }
 }
 
 const images = new Map() // id -> PNG Buffer
 let generationQueue = Promise.resolve()
 
-export function generateImage(prompt, style, creativity) {
+function enqueue(operation) {
   // The local GPU serves one image at a time. Start each timeout only when its
   // request is sent, so later players don't time out while waiting in the queue.
-  const result = generationQueue.then(() => requestImage(prompt, style, creativity))
+  const result = generationQueue.then(operation)
   generationQueue = result.catch(() => {})
   return result
 }
 
-async function requestImage(prompt, style, creativity) {
+export function generateImage(prompt, style, creativity, model) {
+  return enqueue(() => requestImage(prompt, style, creativity, model))
+}
+
+export function prepareImageModel(model) {
+  return enqueue(async () => {
+    const res = await fetch(`${process.env.IMAGE_API_URL}/prepare`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.IMAGE_API_SECRET}` },
+      body: JSON.stringify({ model }),
+      signal: AbortSignal.timeout(Number(process.env.IMAGE_TIMEOUT_MS) || 300_000),
+    })
+    if (!res.ok) throw new Error(`image API responded ${res.status}`)
+  })
+}
+
+async function requestImage(prompt, style, creativity, model) {
   const res = await fetch(`${process.env.IMAGE_API_URL}/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.IMAGE_API_SECRET}` },
-    body: JSON.stringify({ prompt, style, creativity }),
+    body: JSON.stringify({ prompt, style, creativity, model }),
     signal: AbortSignal.timeout(Number(process.env.IMAGE_TIMEOUT_MS) || 300_000),
   })
   if (!res.ok) throw new Error(`image API responded ${res.status}`)

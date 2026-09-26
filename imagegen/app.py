@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Minimal .env loader so the secret can live in imagegen/.env (gitignored).
 env_file = Path(__file__).with_name(".env")
@@ -32,12 +32,14 @@ if len(SECRET) < 16:
 
 ART_STYLES = {"Any", "Photo", "Cartoon", "Pixel art", "Oil painting", "Claymation"}
 
+from model_config import DEFAULT_MODEL, MODELS, model_config
+
 
 def load_generator():
-    from model import generate, load_model
+    from model import generate, prepare_model
 
-    load_model()
-    return generate
+    prepare_model()
+    return generate, prepare_model
 
 
 def load_scorer():
@@ -57,7 +59,7 @@ async def lifespan(app):
     ):
         app.state.worker = worker
         app.state.scorer = scorer
-        app.state.generate = await loop.run_in_executor(worker, load_generator)
+        app.state.generate, app.state.prepare = await loop.run_in_executor(worker, load_generator)
         app.state.embed = await loop.run_in_executor(scorer, load_scorer)
         yield
 
@@ -66,7 +68,17 @@ async def lifespan(app):
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 
-class GenerateRequest(BaseModel):
+class ModelRequest(BaseModel):
+    model: str | None = None
+
+    @field_validator("model")
+    @classmethod
+    def known_model(cls, value):
+        model_config(value)
+        return value
+
+
+class GenerateRequest(ModelRequest):
     prompt: str = Field(min_length=1, max_length=200)
     style: str = "Any"
     creativity: int = Field(default=50, ge=0, le=100)
@@ -82,9 +94,15 @@ async def generate_image(req: GenerateRequest):
     if req.style not in ART_STYLES:
         raise HTTPException(status_code=422, detail="unknown style")
     png = await asyncio.get_running_loop().run_in_executor(
-        app.state.worker, app.state.generate, req.prompt, req.style, req.creativity
+        app.state.worker, app.state.generate, req.prompt, req.style, req.creativity, req.model
     )
     return Response(png, media_type="image/png")
+
+
+@app.post("/prepare", dependencies=[Depends(require_game_server)])
+async def prepare_image_model(req: ModelRequest):
+    await asyncio.get_running_loop().run_in_executor(app.state.worker, app.state.prepare, req.model)
+    return {"ready": True, "model": model_config(req.model)["id"]}
 
 
 MAX_PNG = 8 * 1024 * 1024
@@ -106,9 +124,12 @@ async def embed_image(request: Request):
 @app.get("/health", dependencies=[Depends(require_game_server)])
 async def model_status():
     # Startup finishes loading the model before this endpoint becomes reachable.
-    from model import FLASH, MODEL_ID, SIZE, STEPS
+    from model import active_model
 
-    return {"ready": True, "model": MODEL_ID, "size": SIZE, "steps": STEPS, "flash": FLASH}
+    config = model_config()
+    return {"ready": True, "model": config["repo"], "size": config["size"], "steps": config["steps"],
+            "flash": config["flash"], "defaultModel": DEFAULT_MODEL, "activeModel": active_model(),
+            "models": list(MODELS.values())}
 
 
 if __name__ == "__main__":

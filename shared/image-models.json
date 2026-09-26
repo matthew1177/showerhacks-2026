@@ -1,0 +1,20 @@
+[
+  {
+    "id": "chroma-flash",
+    "label": "Chroma Flash",
+    "description": "Chroma’s fast mode for short rounds.",
+    "repo": "lodestones/Chroma1-HD",
+    "flash": true,
+    "size": 384,
+    "steps": 6
+  },
+  {
+    "id": "sdxl-turbo",
+    "label": "SDXL-Turbo",
+    "description": "Quick images with a different visual style.",
+    "repo": "stabilityai/sdxl-turbo",
+    "flash": false,
+    "size": 512,
+    "steps": 1
+  }
+]

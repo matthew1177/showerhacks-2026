@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ART_STYLES } from '../mock'
+import IMAGE_MODELS from '../../../shared/image-models.json'
 
 const EXAMPLES = [
   'A tiny astronaut watering a garden on the moon',
@@ -13,6 +14,7 @@ export default function ImageTest() {
   const [prompt, setPrompt] = useState('')
   const [style, setStyle] = useState('Any')
   const [creativity, setCreativity] = useState(50)
+  const [model, setModel] = useState('chroma-flash')
   const [service, setService] = useState({ ready: false, message: 'Checking the image service…' })
   const [busy, setBusy] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -57,13 +59,13 @@ export default function ImageTest() {
       const response = await fetch('/api/image-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt.trim(), style, creativity }),
+        body: JSON.stringify({ prompt: prompt.trim(), style, creativity, model }),
       })
       if (!response.ok) throw new Error((await response.json()).error || 'Could not generate the image.')
       if (!response.headers.get('content-type')?.startsWith('image/png')) throw new Error('The image service returned an unexpected response.')
       const blob = await response.blob()
       setResult({
-        url: URL.createObjectURL(blob), prompt: prompt.trim(), style, creativity,
+        url: URL.createObjectURL(blob), prompt: prompt.trim(), style, creativity, model,
         seconds: Math.round(Number(response.headers.get('X-Generation-Time-Ms')) / 1000),
       })
     } catch (err) {
@@ -84,16 +86,22 @@ export default function ImageTest() {
           <div>
             <p className="image-test__eyebrow">IMAGE PLAYGROUND</p>
             <h1>Give your ideas a picture.</h1>
-            <p className="muted">Try Chroma with the same styles and creativity settings as the game.</p>
+            <p className="muted">Try either image model with the same styles and creativity settings as the game.</p>
           </div>
           <div className={`image-test__status ${service.ready ? 'is-ready' : ''}`} role="status">
-            <span />{service.ready ? 'Chroma ready' : 'Waiting for Chroma'}
+            <span />{service.ready ? 'Image service ready' : 'Waiting for image service'}
           </div>
         </div>
 
         <div className="image-test__grid">
           <form className="card image-test__form" onSubmit={generate}>
             <fieldset disabled={busy}>
+              <label className="field">
+                <span>Image model</span>
+                <select value={model} onChange={(event) => setModel(event.target.value)}>
+                  {IMAGE_MODELS.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
+                </select>
+              </label>
               <label className="field">
                 <span className="image-test__label">Your prompt <small>{prompt.length}/200</small></span>
                 <textarea
@@ -129,7 +137,7 @@ export default function ImageTest() {
           <section className="card image-test__output" aria-label="Image preview" aria-busy={busy}>
             <div className="image-test__output-heading">
               <h2 className="card__title">Preview</h2>
-              <span className="pill">Chroma1-HD{service.flash ? ' · Flash' : ''}{service.size ? ` · ${service.size} × ${service.size}` : ''}</span>
+              <span className="pill">{IMAGE_MODELS.find((choice) => choice.id === (result?.model ?? model))?.label}</span>
             </div>
             <div className={`image-test__canvas ${busy ? 'is-busy' : ''}`}>
               {result && <img src={result.url} alt={result.prompt} />}
@@ -148,7 +156,7 @@ export default function ImageTest() {
             </div>
             {result && <div className="image-test__result">
               <div><p>{result.prompt}</p><span className="muted small">{result.style} · Creativity {result.creativity} · {duration(result.seconds)}</span></div>
-              <a className="btn btn--secondary" href={result.url} download="chroma-image.png">Save PNG ↓</a>
+              <a className="btn btn--secondary" href={result.url} download={`${result.model}-image.png`}>Save PNG ↓</a>
             </div>}
           </section>
         </div>

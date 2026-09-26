@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Avatar, Wordmark } from '../components/ui'
 import { ART_STYLES } from '../mock'
+import IMAGE_MODELS from '../../../shared/image-models.json'
 
 const creativityLabel = (n) => (n < 35 ? 'Literal' : n < 63 ? 'Balanced' : n < 88 ? 'Creative' : 'Wild')
 
 export default function Lobby({ players, me, isHost, hostId, settings, onSettings, onName, onStart }) {
   const [name, setName] = useState(null)
+  const selectedModel = IMAGE_MODELS.find((model) => model.id === settings.imageModel) ?? IMAGE_MODELS[0]
   const set = (k) => (e) => onSettings({ ...settings, [k]: e.target.value })
   const commitName = () => {
     const next = name?.replace(/\s+/g, ' ').trim()
@@ -59,6 +61,13 @@ export default function Lobby({ players, me, isHost, hostId, settings, onSetting
 
         <section className="card">
           <h2 className="card__title">Settings</h2>
+          <label className="field">
+            <span>Image model</span>
+            <select value={selectedModel.id} onChange={set('imageModel')} disabled={!isHost} aria-describedby="image-model-description">
+              {IMAGE_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}
+            </select>
+            <small className="muted" id="image-model-description">{selectedModel.description}</small>
+          </label>
           <label className="field">
             <span>Rounds</span>
             <select value={settings.rounds} onChange={set('rounds')} disabled={!isHost}>

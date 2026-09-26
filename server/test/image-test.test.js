@@ -73,6 +73,18 @@ test('playground rejects tunnels, Discord proxies, and cross-site requests befor
   assert.equal(requests.length, 0)
 })
 
+test('playground forwards each supported model and rejects unknown choices', async (t) => {
+  const { requests, post } = await fixture(t)
+  for (const model of ['chroma-flash', 'sdxl-turbo']) {
+    const response = await post({ prompt: 'duck', model })
+    assert.equal(response.status, 200)
+    await response.arrayBuffer()
+    assert.equal(requests.at(-1).body.model, model)
+  }
+  assert.equal((await post({ prompt: 'duck', model: 'unknown' })).status, 422)
+  assert.equal(requests.length, 2)
+})
+
 test('playground validates input and reports unavailable generation without a placeholder', async (t) => {
   const { origin, requests, post } = await fixture(t, (req, res) => res.writeHead(500).end())
   for (const body of [null, {}, { prompt: ' ' }, { prompt: 'a'.repeat(201) }, { prompt: 'duck', style: 'invalid' }, { prompt: 'duck', creativity: 101 }, { prompt: 'duck', creativity: 1.5 }]) {
