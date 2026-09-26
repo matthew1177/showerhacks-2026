@@ -23,5 +23,21 @@ export async function generateImage(prompt, style, creativity) {
   return id
 }
 
+// Unit-length DINOv2 ViT-B/14 embedding of a generated image, so guesses can be scored by how
+// close their image stays to the chain's reference image.
+export async function embedImage(id) {
+  const res = await fetch(`${process.env.IMAGE_API_URL}/embed`, {
+    method: 'POST',
+    headers: { 'content-type': 'image/png', authorization: `Bearer ${process.env.IMAGE_API_SECRET}` },
+    body: images.get(id),
+    signal: AbortSignal.timeout(Number(process.env.IMAGE_TIMEOUT_MS) || 60_000),
+  })
+  if (!res.ok) throw new Error(`embed API responded ${res.status}`)
+  return (await res.json()).embedding
+}
+
+// Cosine similarity of unit vectors as 0-100 points (unrelated images land near 0).
+export const similarityPoints = (a, b) => Math.round(Math.max(0, a.reduce((sum, x, i) => sum + x * b[i], 0)) * 100)
+
 export const getImage = (id) => images.get(id)
 export const deleteImage = (id) => images.delete(id)

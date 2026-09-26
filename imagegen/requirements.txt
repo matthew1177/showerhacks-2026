@@ -5,3 +5,5 @@ huggingface-hub
 regex
 numpy
 Pillow
+torch
+transformers

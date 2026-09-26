@@ -2,7 +2,7 @@
 // clients only receive a per-player view (see `view`) so nobody can peek at other chains.
 
 import { randomUUID } from 'node:crypto'
-import { deleteImage, generateImage, imagesEnabled } from './images.js'
+import { deleteImage, embedImage, generateImage, imagesEnabled, similarityPoints } from './images.js'
 
 const COLORS = ['mauve', 'pink', 'green', 'yellow', 'red', 'blue', 'peach', 'teal', 'lavender', 'rosewater']
 const ART_STYLES = ['Any', 'Photo', 'Cartoon', 'Pixel art', 'Oil painting', 'Claymation']
@@ -160,12 +160,14 @@ export class Room {
       // Chains keep rotating when the chosen round count exceeds the player count.
       turns: this.settings.rounds,
       turn: 0,
-      chains: order.map((ownerId) => ({ ownerId, steps: [] })),
+      // `reference` is the DINOv2 embedding of the chain's first image; guesses score against it.
+      chains: order.map((ownerId) => ({ ownerId, steps: [], reference: null })),
       submissions: new Map(),
       drafts: new Map(),
       endsAt: 0,
       timer: null,
       generating: false, // between turns while the image model works; the timer hasn't started
+      finishing: false, // after the last turn while its images are made and scored
     }
     this.startTurn()
   }
@@ -204,45 +206,73 @@ export class Room {
     for (const id of g.order) {
       const text = g.submissions.get(id) || g.drafts.get(id) || TIMED_OUT
       const chain = this.chainFor(id)
-      chain.steps.push({ kind: g.turn === 0 ? 'prompt' : 'guess', playerId: id, text })
-      if (last) continue
+      const step = { kind: g.turn === 0 ? 'prompt' : 'guess', playerId: id, text }
+      chain.steps.push(step)
+      // With the image model, final guesses get an image too so they can be scored.
+      if (last && !imagesEnabled()) continue
+      if (step.kind === 'guess' && chain.reference && text === TIMED_OUT) step.score = 0
       // `seed` drives the placeholder gradient if there's no image model or it fails.
       const image = { kind: 'image', seed: randomUUID(), url: null, pending: imagesEnabled() }
       chain.steps.push(image)
-      if (imagesEnabled() && text !== TIMED_OUT) jobs.push(this.renderImage(image, text))
+      if (imagesEnabled() && text !== TIMED_OUT) jobs.push(this.renderImage(image, text, chain, step))
       else image.pending = false
     }
     clearTimeout(g.timer)
     g.submissions.clear()
     g.drafts.clear()
-    if (last) {
-      this.phase = 'reveal'
-      this.reveal = { chain: 0, shown: 1 }
-      return
-    }
-    g.turn++
+    if (last && !jobs.length) return this.startReveal()
+    if (!last) g.turn++
     if (!jobs.length) return this.startTurn()
     // Hold the next turn's timer until every image is ready, so nobody guesses at a spinner.
     g.generating = true
+    g.finishing = last
     Promise.all(jobs).then(() => {
       if (this.disposed || this.game !== g) return // game ended or room closed meanwhile
       g.generating = false
-      this.startTurn()
+      if (last) this.startReveal()
+      else this.startTurn()
       this.broadcast()
     })
   }
 
-  async renderImage(step, prompt) {
+  // Draws `text`'s image into `image`, then scores `step` (a guess) by how close that image is
+  // to the chain's reference; a prompt's image becomes the reference.
+  async renderImage(image, text, chain, step) {
     try {
-      const id = await generateImage(prompt, this.settings.artStyle, this.settings.creativity)
+      const id = await generateImage(text, this.settings.artStyle, this.settings.creativity)
       if (this.disposed) return deleteImage(id)
       this.imageIds.push(id)
-      step.url = `/images/${id}.png`
+      image.url = `/images/${id}.png`
+      image.pending = false
+      const embedding = await embedImage(id)
+      if (step.kind === 'prompt') chain.reference = embedding
+      else if (chain.reference) step.score = similarityPoints(embedding, chain.reference)
     } catch (err) {
-      console.error('image generation failed:', err.message)
+      console.error('image generation or scoring failed:', err.message)
     } finally {
-      step.pending = false
+      image.pending = false
     }
+  }
+
+  startReveal() {
+    this.phase = 'reveal'
+    this.reveal = { chain: 0, shown: 1, leaderboard: false }
+  }
+
+  // Total guess points per player, best first; null when nothing was scored.
+  leaderboard() {
+    const totals = new Map(this.game.order.map((id) => [id, { playerId: id, points: 0, guesses: 0 }]))
+    let scored = false
+    for (const chain of this.game.chains) {
+      for (const step of chain.steps) {
+        if (step.score === undefined) continue
+        scored = true
+        const entry = totals.get(step.playerId)
+        entry.points += step.score
+        entry.guesses++
+      }
+    }
+    return scored ? [...totals.values()].sort((a, b) => b.points - a.points) : null
   }
 
   revealNext() {
@@ -250,6 +280,7 @@ export class Room {
     const chains = this.game.chains
     if (r.shown < chains[r.chain].steps.length) r.shown++
     else if (r.chain + 1 < chains.length) Object.assign(r, { chain: r.chain + 1, shown: 1 })
+    else if (this.leaderboard()) r.leaderboard = true
   }
 
   backToLobby() {
@@ -285,16 +316,19 @@ export class Room {
         turns: g.turns,
         msLeft: g.generating ? null : Math.max(0, g.endsAt - Date.now()),
         seconds: g.turn === 0 ? this.settings.promptSeconds : this.settings.guessSeconds,
+        finishing: g.finishing,
         // null = joined mid-game, just watching
-        task: !chain ? null : g.turn === 0 ? { kind: 'prompt' } : { kind: 'guess', image: chain.steps.at(-1) },
+        task: !chain || g.finishing ? null : g.turn === 0 ? { kind: 'prompt' } : { kind: 'guess', image: chain.steps.at(-1) },
         submitted: g.submissions.get(id) ?? null,
       }
     }
 
     if (this.phase === 'reveal') {
-      const { chain, shown } = this.reveal
+      const { chain, shown, leaderboard } = this.reveal
       const c = g.chains[chain]
       base.reveal = {
+        leaderboard: leaderboard ? this.leaderboard() : null,
+        scored: Boolean(this.leaderboard()),
         chain,
         chains: g.chains.length,
         ownerId: c.ownerId,

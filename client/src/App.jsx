@@ -56,7 +56,7 @@ export default function App() {
       )}
       {state.phase === 'play' && (
         !play.task || play.submitted
-          ? <Waiting play={play} players={state.players} submitted={play.submitted} onEdit={() => send('unsubmit')} />
+          ? <Waiting play={play} players={state.players} submitted={play.finishing ? null : play.submitted} onEdit={() => send('unsubmit')} />
           : play.task.kind === 'prompt' ? <Prompt {...typing} /> : <Guess {...typing} />
       )}
       {state.phase === 'reveal' && (

@@ -283,6 +283,21 @@ h1, h2, p { margin: 0; }
 }
 .reaction:hover { border-color: var(--accent); }
 
+/* ---------- scores ---------- */
+.pill--score { background: var(--green); color: var(--on-accent); }
+.leaderboard {
+  list-style: none; margin: 0 auto; padding: 0 16px; max-width: 560px; display: grid; gap: 8px;
+}
+.leaderboard li {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  border-radius: var(--radius); background: var(--bg-2); animation: pop .25s ease-out backwards;
+}
+.leaderboard li.is-winner { box-shadow: inset 0 0 0 2px var(--yellow); }
+.leaderboard__rank { width: 28px; text-align: center; font-weight: 800; color: var(--muted); }
+.leaderboard__name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.leaderboard__points { font-size: 20px; min-width: 3ch; text-align: right; }
+.leaderboard__note { max-width: 560px; margin: 16px auto 0; padding: 0 16px; text-align: center; }
+
 /* ---------- connection ---------- */
 .banner {
   position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 10;

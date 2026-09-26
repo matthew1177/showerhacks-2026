@@ -1,4 +1,4 @@
-"""Image API: prompt in, PNG out.
+"""Image API: prompt in, PNG out; PNG in, DINOv2 embedding out (for scoring guesses).
 
 Only the game server (../server) is meant to call this, never players' browsers. To keep people
 outside the game from using it for free images:
@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 # Minimal .env loader so the secret can live in imagegen/.env (gitignored).
@@ -41,12 +41,25 @@ def load_generator():
     return generate
 
 
+def load_scorer():
+    from scorer import embed
+
+    return embed
+
+
 @asynccontextmanager
 async def lifespan(app):
-    # A single worker keeps all MLX work on one thread and serializes images.
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="image-model") as worker:
+    # A single worker keeps all MLX work on one thread and serializes images. DINOv2 scoring runs
+    # on its own worker (PyTorch on CPU) so embedding one image doesn't wait behind the next.
+    loop = asyncio.get_running_loop()
+    with (
+        ThreadPoolExecutor(max_workers=1, thread_name_prefix="image-model") as worker,
+        ThreadPoolExecutor(max_workers=1, thread_name_prefix="scorer") as scorer,
+    ):
         app.state.worker = worker
-        app.state.generate = await asyncio.get_running_loop().run_in_executor(worker, load_generator)
+        app.state.scorer = scorer
+        app.state.generate = await loop.run_in_executor(worker, load_generator)
+        app.state.embed = await loop.run_in_executor(scorer, load_scorer)
         yield
 
 
@@ -73,6 +86,22 @@ async def generate_image(req: GenerateRequest):
         app.state.worker, app.state.generate, req.prompt, req.style, req.creativity
     )
     return Response(png, media_type="image/png")
+
+
+MAX_PNG = 8 * 1024 * 1024
+
+
+@app.post("/embed", dependencies=[Depends(require_game_server)])
+async def embed_image(request: Request):
+    """PNG body in, unit-length DINOv2 embedding out, for scoring guesses against the reference."""
+    png = await request.body()
+    if not png or len(png) > MAX_PNG:
+        raise HTTPException(status_code=413 if png else 422)
+    try:
+        embedding = await asyncio.get_running_loop().run_in_executor(app.state.scorer, app.state.embed, png)
+    except Exception:
+        raise HTTPException(status_code=422, detail="unreadable image")
+    return {"embedding": embedding}
 
 
 if __name__ == "__main__":

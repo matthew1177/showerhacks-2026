@@ -6,7 +6,12 @@ export default function Waiting({ play, players, submitted, onEdit }) {
       <TopBar round={play.turn} rounds={play.turns} label="Waiting for others" endsAt={play.endsAt} seconds={play.seconds} />
       <main className="play__main">
         <div className="dots"><span /><span /><span /></div>
-        {submitted ? (
+        {play.finishing ? (
+          <>
+            <h2 className="play__heading">Drawing and scoring the final guesses</h2>
+            <p className="muted">The reveal starts in a moment.</p>
+          </>
+        ) : submitted ? (
           <>
             <h2 className="play__heading">Nice! Waiting on everyone else</h2>
             <p className="muted">You wrote “{submitted}”</p>

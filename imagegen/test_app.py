@@ -24,7 +24,7 @@ class ModelThreadTest(unittest.IsolatedAsyncioTestCase):
 
             return generate
 
-        with patch.object(image_api, "load_generator", load_generator):
+        with patch.object(image_api, "load_generator", load_generator), patch.object(image_api, "load_scorer", lambda: None):
             async with image_api.lifespan(image_api.app):
                 responses = await asyncio.gather(*(
                     image_api.generate_image(image_api.GenerateRequest(prompt=prompt, style="Cartoon", creativity=80))
