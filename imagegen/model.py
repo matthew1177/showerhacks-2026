@@ -70,6 +70,11 @@ def load_model(model=None):
 
         logger.info("Fusing Chroma Flash adapter")
         fuse_flash_adapter(pipeline.transformer)
+    if config["quantization"] == "int8":
+        from chroma_quantization import quantize_chroma
+
+        # Merge the adapter at the original precision before discarding float weights.
+        quantize_chroma(pipeline)
     pipeline.to(device)
     pipeline.vae.enable_tiling()
     # Pay for the first GPU kernels at startup, before /health reports ready.
@@ -77,7 +82,8 @@ def load_model(model=None):
     _render(pipeline, "A red apple on a wooden table", config, seed=0)
     _pipeline = pipeline
     _active_model = config["id"]
-    logger.info("%s ready: %sx%s, %s steps", config["label"], config["size"], config["size"], config["steps"])
+    logger.info("%s ready: %sx%s, %s steps, quantization=%s",
+                config["label"], config["size"], config["size"], config["steps"], config["quantization"])
     return pipeline
 
 

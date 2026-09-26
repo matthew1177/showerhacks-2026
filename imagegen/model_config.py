@@ -16,9 +16,14 @@ DEFAULT_MODEL = os.environ.get(
 if DEFAULT_MODEL not in MODELS:
     raise ValueError(f"Unknown IMAGE_MODEL: {DEFAULT_MODEL}")
 
+CHROMA_QUANTIZATION = os.environ.get("IMAGE_CHROMA_QUANTIZATION", "int8").strip().lower()
+if CHROMA_QUANTIZATION not in ("int8", "none"):
+    raise ValueError("IMAGE_CHROMA_QUANTIZATION must be int8 or none.")
+
 # Legacy size/step overrides apply only to the service's default model. Other
 # choices retain their own settings, so selecting HD never inherits Flash's six steps.
 for _name, _model in MODELS.items():
+    _model["quantization"] = CHROMA_QUANTIZATION if _name.startswith("chroma-") else "none"
     _prefix = "IMAGE_" + _name.upper().replace("CHROMA-", "").replace("SDXL-", "").replace("-", "_")
     for _field in ("size", "steps"):
         _fallback = os.environ.get("IMAGE_" + _field.upper()) if _name == DEFAULT_MODEL else None

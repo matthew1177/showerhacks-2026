@@ -127,8 +127,10 @@ async def model_status():
     from model import active_model
 
     config = model_config()
+    active = active_model()
     return {"ready": True, "model": config["repo"], "size": config["size"], "steps": config["steps"],
-            "flash": config["flash"], "defaultModel": DEFAULT_MODEL, "activeModel": active_model(),
+            "flash": config["flash"], "defaultModel": DEFAULT_MODEL, "activeModel": active,
+            "activeQuantization": model_config(active)["quantization"] if active else None,
             "models": list(MODELS.values())}
 
 

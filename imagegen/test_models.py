@@ -13,12 +13,15 @@ class ModelSelectionTest(unittest.TestCase):
 
     def test_switching_reuses_current_pipeline_and_fuses_only_chroma(self):
         flash, turbo, reloaded_flash = MagicMock(), MagicMock(), MagicMock()
+        events = []
         with (
+            patch.dict(model_config("chroma-flash"), {"quantization": "int8"}),
             patch.object(model.torch.backends.mps, "is_available", return_value=False),
             patch.object(model.torch.cuda, "is_available", return_value=False),
             patch.object(model.ChromaPipeline, "from_pretrained", side_effect=[flash, reloaded_flash]) as chroma_load,
             patch.object(model.StableDiffusionXLPipeline, "from_pretrained", return_value=turbo) as turbo_load,
-            patch("chroma_flash.fuse_flash_adapter") as fuse,
+            patch("chroma_flash.fuse_flash_adapter", side_effect=lambda _: events.append("fuse")) as fuse,
+            patch("chroma_quantization.quantize_chroma", side_effect=lambda _: events.append("quantize")) as quantize,
             patch.object(model, "_render") as render,
         ):
             self.assertIs(model.load_model("chroma-flash"), flash)
@@ -29,8 +32,22 @@ class ModelSelectionTest(unittest.TestCase):
             self.assertEqual(chroma_load.call_count, 2)
             self.assertEqual(turbo_load.call_count, 1)
             self.assertEqual([call.args[0] for call in fuse.call_args_list], [flash.transformer, reloaded_flash.transformer])
+            self.assertEqual([call.args[0] for call in quantize.call_args_list], [flash, reloaded_flash])
+            self.assertEqual(events, ["fuse", "quantize", "fuse", "quantize"])
             self.assertEqual(render.call_count, 3)
             self.assertEqual(model.active_model(), "chroma-flash")
+
+    def test_original_precision_can_be_selected_for_chroma(self):
+        with (
+            patch.dict(model_config("chroma-hd"), {"quantization": "none"}),
+            patch.object(model.torch.backends.mps, "is_available", return_value=False),
+            patch.object(model.torch.cuda, "is_available", return_value=False),
+            patch.object(model.ChromaPipeline, "from_pretrained"),
+            patch("chroma_quantization.quantize_chroma") as quantize,
+            patch.object(model, "_render"),
+        ):
+            model.load_model("chroma-hd")
+            quantize.assert_not_called()
 
     def test_failed_switch_does_not_return_the_previous_models_images(self):
         model._pipeline, model._active_model = MagicMock(), "chroma-flash"

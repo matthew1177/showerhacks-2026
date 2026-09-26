@@ -81,14 +81,31 @@ offers the same choices.
 
 Chroma Flash defaults to 384×384 with six sampling steps. This trades
 resolution and detail for short game turns while keeping Chroma. On Apple Silicon,
-the service uses float16, shorter text padding, Metal fast math, and synchronization
-between sampling steps to keep the GPU queue from building up. Explicit
+the service stores the transformer and T5 text encoder's linear weights as **INT8**,
+with float16 activations, embeddings, and VAE (some text encoder layers retain their
+original floating-point precision). The Flash adapter is fused before quantization.
+Quanto freezes the weights once at startup, and a Chroma-specific linear layer uses
+PyTorch's native Metal INT8 kernel. The service also uses shorter text padding, Metal
+fast math, and synchronization between sampling steps to keep the GPU queue from
+building up. Explicit
 `PYTORCH_MPS_FAST_MATH` / `PYTORCH_MPS_PREFER_METAL` environment values take precedence.
 
-On the M3 Max / 128 GB development Mac, six different prompts covering every art
-style took **5.9–6.6 seconds each** through `/api/image-test` after startup (September
-26, 2026). The average was 6.24 seconds, including PNG encoding and the HTTP response.
-This is a local measurement, not a guaranteed deadline on other hardware or under load.
+Set `IMAGE_CHROMA_QUANTIZATION=none` in `imagegen/.env` and restart the image service
+to restore the original floating-point weights; the default is `int8`. This applies
+to both Chroma Flash and Chroma HD. SDXL-Turbo is unaffected. Quantization happens
+after loading, so the original downloads and startup memory requirements remain.
+The authenticated `/health` response reports `activeQuantization` for the loaded model.
+
+On the M3 Max / 128 GB development Mac, two fixed-seed prompts at 384×384 / six steps
+took **7.28–7.35 seconds each** with INT8 versus **5.73–6.06 seconds** with the original
+floating-point weights (September 26, 2026). Allocated GPU tensor memory after warmup
+dropped from **29.5 GB to 14.0 GB** (decimal GB, excluding allocator caches). Both
+image pairs were visually inspected; small detail changes are expected. This saves
+memory, with a modest latency cost in this comparison. Timings exclude startup and
+queued requests, and vary with hardware and competing GPU work.
+After restarting the image service, three requests through the game's
+`/api/image-test` endpoint took **6.13–6.31 seconds**, including PNG encoding and
+the HTTP response; all three generated images were inspected.
 
 The [SDXL-Turbo model](https://huggingface.co/stabilityai/sdxl-turbo) uses 512×512,
 one sampling step, and guidance disabled. Its weights download on first use
