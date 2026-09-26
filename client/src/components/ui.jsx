@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { placeholderImage } from '../mock'
+import { backendUrl } from '../session'
 
 export function Avatar({ player, size = 32 }) {
   return (
@@ -58,7 +59,9 @@ export function PlayerStrip({ players }) {
   )
 }
 
-export function GeneratedImage({ seed, loading }) {
+// `image` is an image step from the server: { seed, url, pending }. No url = placeholder gradient.
+export function GeneratedImage({ image }) {
+  const loading = image.pending
   return (
     <div className={`genimg ${loading ? 'genimg--loading' : ''}`}>
       {loading ? (
@@ -66,8 +69,10 @@ export function GeneratedImage({ seed, loading }) {
           <div className="spinner" />
           <span>Generating image…</span>
         </div>
+      ) : image.url ? (
+        <img className="genimg__img" src={backendUrl(image.url).href} alt="AI-generated image" />
       ) : (
-        <div className="genimg__img" style={{ background: placeholderImage(seed) }} />
+        <div className="genimg__img" style={{ background: placeholderImage(image.seed) }} />
       )}
     </div>
   )

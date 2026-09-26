@@ -2,6 +2,7 @@
 // clients only receive a per-player view (see `view`) so nobody can peek at other chains.
 
 import { randomUUID } from 'node:crypto'
+import { deleteImage, generateImage, imagesEnabled } from './images.js'
 
 const COLORS = ['mauve', 'pink', 'green', 'yellow', 'red', 'blue', 'peach', 'teal', 'lavender', 'rosewater']
 const ART_STYLES = ['Any', 'Photo', 'Cartoon', 'Pixel art', 'Oil painting', 'Claymation']
@@ -26,6 +27,8 @@ export class Room {
     this.phase = 'lobby' // lobby | play | reveal
     this.game = null
     this.reveal = null
+    this.imageIds = []
+    this.disposed = false
   }
 
   get empty() {
@@ -68,7 +71,14 @@ export class Room {
   }
 
   dispose() {
+    this.disposed = true
     clearTimeout(this.game?.timer)
+    this.clearImages()
+  }
+
+  clearImages() {
+    this.imageIds.forEach(deleteImage)
+    this.imageIds = []
   }
 
   connected(id) {
@@ -93,11 +103,12 @@ export class Room {
         if (isHost && this.players.length >= 2) this.startGame()
         break
       case 'play:draft':
+        if (this.game.generating) return
         this.game.drafts.set(id, clean(msg.text, MAX_TEXT))
         return // drafts are silent; no broadcast
       case 'play:submit': {
         const text = clean(msg.text, MAX_TEXT)
-        if (!text || !this.game.order.includes(id)) return
+        if (!text || this.game.generating || !this.game.order.includes(id)) return
         this.game.submissions.set(id, text)
         this.maybeEndTurn()
         break
@@ -142,6 +153,7 @@ export class Room {
       drafts: new Map(),
       endsAt: 0,
       timer: null,
+      generating: false, // between turns while the image model works; the timer hasn't started
     }
     this.startTurn()
   }
@@ -168,6 +180,7 @@ export class Room {
 
   maybeEndTurn() {
     const g = this.game
+    if (g.generating) return
     const waiting = g.order.some((id) => this.connected(id) && !g.submissions.has(id))
     if (!waiting) this.endTurn()
   }
@@ -175,20 +188,48 @@ export class Room {
   endTurn() {
     const g = this.game
     const last = g.turn + 1 >= g.turns
+    const jobs = []
     for (const id of g.order) {
       const text = g.submissions.get(id) || g.drafts.get(id) || TIMED_OUT
       const chain = this.chainFor(id)
       chain.steps.push({ kind: g.turn === 0 ? 'prompt' : 'guess', playerId: id, text })
-      // Stand-in for the image model: an opaque seed so the guesser can't read the prompt from it.
-      if (!last) chain.steps.push({ kind: 'image', seed: randomUUID() })
+      if (last) continue
+      // `seed` drives the placeholder gradient if there's no image model or it fails.
+      const image = { kind: 'image', seed: randomUUID(), url: null, pending: imagesEnabled() }
+      chain.steps.push(image)
+      if (imagesEnabled() && text !== TIMED_OUT) jobs.push(this.renderImage(image, text))
+      else image.pending = false
     }
+    clearTimeout(g.timer)
+    g.submissions.clear()
+    g.drafts.clear()
     if (last) {
-      clearTimeout(g.timer)
       this.phase = 'reveal'
       this.reveal = { chain: 0, shown: 1 }
-    } else {
-      g.turn++
+      return
+    }
+    g.turn++
+    if (!jobs.length) return this.startTurn()
+    // Hold the next turn's timer until every image is ready, so nobody guesses at a spinner.
+    g.generating = true
+    Promise.all(jobs).then(() => {
+      if (this.disposed || this.game !== g) return // game ended or room closed meanwhile
+      g.generating = false
       this.startTurn()
+      this.broadcast()
+    })
+  }
+
+  async renderImage(step, prompt) {
+    try {
+      const id = await generateImage(prompt, this.settings.artStyle)
+      if (this.disposed) return deleteImage(id)
+      this.imageIds.push(id)
+      step.url = `/images/${id}.png`
+    } catch (err) {
+      console.error('image generation failed:', err.message)
+    } finally {
+      step.pending = false
     }
   }
 
@@ -203,6 +244,7 @@ export class Room {
     this.phase = 'lobby'
     this.game = null
     this.reveal = null
+    this.clearImages()
     this.players = this.players.filter((p) => this.connected(p.id))
   }
 
@@ -228,10 +270,10 @@ export class Room {
       base.play = {
         turn: g.turn + 1,
         turns: g.turns,
-        msLeft: Math.max(0, g.endsAt - Date.now()),
+        msLeft: g.generating ? null : Math.max(0, g.endsAt - Date.now()),
         seconds: g.turn === 0 ? this.settings.promptSeconds : this.settings.guessSeconds,
         // null = joined mid-game, just watching
-        task: !chain ? null : g.turn === 0 ? { kind: 'prompt' } : { kind: 'guess', seed: chain.steps.at(-1).seed },
+        task: !chain ? null : g.turn === 0 ? { kind: 'prompt' } : { kind: 'guess', image: chain.steps.at(-1) },
         submitted: g.submissions.get(id) ?? null,
       }
     }

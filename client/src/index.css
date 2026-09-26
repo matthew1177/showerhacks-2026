@@ -163,7 +163,7 @@ select {
   width: 100%; max-width: min(560px, 55dvh); aspect-ratio: 1; flex: none;
   border-radius: var(--radius); overflow: hidden; background: var(--bg-3);
 }
-.genimg__img { width: 100%; height: 100%; }
+.genimg__img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .genimg__loading {
   height: 100%; display: grid; place-content: center; justify-items: center; gap: 12px;
   color: var(--muted); font-size: 14px;

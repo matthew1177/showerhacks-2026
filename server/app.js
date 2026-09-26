@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { WebSocket, WebSocketServer } from 'ws'
 import { Room } from './game.js'
 import { createDiscordAuth, DiscordError } from './discord.js'
+import { getImage } from './images.js'
 
 const DIST = fileURLToPath(new URL('../client/dist/', import.meta.url))
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' }
@@ -41,6 +42,14 @@ export function createGameServer({ discord = createDiscordAuth(), frontend } = {
   const server = createServer(async (req, res) => {
     try {
       const pathname = requestPath(req.url)
+      // Generated images. Ids are random UUIDs only handed to players in that game.
+      const image = pathname.match(/^\/images\/([0-9a-f-]{36})\.png$/)
+      if (image) {
+        const png = getImage(image[1])
+        if (!png) return res.writeHead(404).end()
+        res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'private, max-age=3600' })
+        return res.end(png)
+      }
       if (pathname === '/api' && req.method === 'GET') return json(res, 200, { status: 'ok' })
       if (pathname === '/api/token') {
         if (req.method !== 'POST') {

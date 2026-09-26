@@ -40,7 +40,8 @@ export function useRoom() {
           setStatus('open')
           setError(null)
           // msLeft -> local deadline, so the timer doesn't depend on client/server clocks agreeing.
-          if (msg.state.play) msg.state.play.endsAt = Date.now() + msg.state.play.msLeft
+          // msLeft is null while images are generating (timer not started yet).
+          if (msg.state.play) msg.state.play.endsAt = msg.state.play.msLeft == null ? null : Date.now() + msg.state.play.msLeft
           msg.state.players = msg.state.players.map((p) => ({ ...p, color: `var(--ctp-${p.color})` }))
           setState(msg.state)
         } else if (msg.type === 'error') {

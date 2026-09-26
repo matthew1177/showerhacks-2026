@@ -30,7 +30,7 @@ export default function Reveal({ reveal, playersById, isHost, onNext, onLobby })
                 <div className="msg__bot">AI</div>
                 <div className="msg__body">
                   <div className="msg__name">Image model <span className="pill pill--bot">BOT</span></div>
-                  <GeneratedImage seed={step.seed} />
+                  <GeneratedImage image={step} />
                 </div>
               </div>
             )
