@@ -1,0 +1,72 @@
+import { useEffect, useState } from 'react'
+import { placeholderImage } from '../mock'
+
+export function Avatar({ player, size = 32 }) {
+  return (
+    <span
+      className="avatar"
+      style={{ width: size, height: size, background: player.color, fontSize: size * 0.42 }}
+      title={player.name}
+    >
+      {player.name[0].toUpperCase()}
+    </span>
+  )
+}
+
+export function Timer({ seconds }) {
+  const [left, setLeft] = useState(seconds)
+  useEffect(() => {
+    const id = setInterval(() => setLeft((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
+  }, [seconds])
+  const pct = (left / seconds) * 100
+  return (
+    <div className={`timer ${left <= 10 ? 'timer--low' : ''}`}>
+      <span className="timer__num">{left}s</span>
+      <div className="timer__bar"><div style={{ width: `${pct}%` }} /></div>
+    </div>
+  )
+}
+
+export function TopBar({ round, rounds, label, seconds }) {
+  return (
+    <header className="topbar">
+      <div className="topbar__round">
+        Round <strong>{round}</strong>/{rounds}
+      </div>
+      <div className="topbar__label">{label}</div>
+      {seconds ? <Timer seconds={seconds} /> : <div />}
+    </header>
+  )
+}
+
+export function PlayerStrip({ players }) {
+  const done = players.filter((p) => p.done).length
+  return (
+    <footer className="strip">
+      <span className="strip__count">{done}/{players.length} ready</span>
+      <div className="strip__avatars">
+        {players.map((p) => (
+          <span key={p.id} className={`strip__p ${p.done ? 'is-done' : ''}`}>
+            <Avatar player={p} size={28} />
+          </span>
+        ))}
+      </div>
+    </footer>
+  )
+}
+
+export function GeneratedImage({ seed, loading }) {
+  return (
+    <div className={`genimg ${loading ? 'genimg--loading' : ''}`}>
+      {loading ? (
+        <div className="genimg__loading">
+          <div className="spinner" />
+          <span>Generating image…</span>
+        </div>
+      ) : (
+        <div className="genimg__img" style={{ background: placeholderImage(seed) }} />
+      )}
+    </div>
+  )
+}
