@@ -22,19 +22,28 @@ A Gartic Phone–style party game, but with an AI image model doing the drawing:
 - The user requested pulling remote updates with rebase while preserving the current local changes.
 - The user requested instructions for running the game server and an explanation of how the frontend connects to it.
 - The user requested committing and pushing the Discord setup changes.
+- The user wants to run the game on a website and asked for a recommended hosting setup.
+- The user requested making the Discord Activity compatible with the multiplayer server.
+- The user requested running the client and server from one server so the frontend can connect through relative `/api` URLs.
+- The user reported `OAuth2 Error: invalid_request: Missing "redirect_uri" in request`. Discord's Activity setup requires a saved OAuth2 redirect URL in the Developer Portal (the official placeholder is `https://127.0.0.1`); the SDK handles the redirect. The app now explains this configuration step when authorization reports a redirect URI error.
+- After adding the redirect URL, the user reported `Could not sign in with Discord. Close and reopen the Activity.` and asked to continue troubleshooting. The running cloudflared tunnel targeted `http://localhost:5173`; token requests there returned HTTP 404, while port 3001 served the API. Sign-in errors now distinguish missing endpoints, network failures, and invalid responses. A local ignored `server/.env` template is prepared for the user to fill in the OAuth2 client secret.
+- The user asked why the frontend and API used different ports and requested the same port. The combined server now defaults to 5173, and the local PORT setting is updated to match the existing tunnel. Old standalone frontend and game server processes are replaced with the combined development server. Keep the existing tunnel to port 5173; no new tunnel hostname is needed.
+- The user requested committing and pushing the combined server and Discord multiplayer integration changes.
 
 ## Current status
 - **Multiplayer backend** (`server/`): Node + `ws` WebSocket server, server-authoritative. `server/game.js` holds the room/game logic (lobby → play turns → reveal); `server/index.js` wires up HTTP/WebSocket and serves `client/dist` in production. Clients get a per-player view of state only, so nobody can see other chains early.
 - The user asked for the text side only for now (prompts/guesses passed between players like text messages) — **no AI image model yet**. Image steps are an opaque random seed rendered as the placeholder gradient from `client/src/mock.js`.
-- Client connects via `client/src/net.js` (`useRoom`) to same-origin `/ws` (Vite proxies it to port 3001 in dev, which keeps it inside Discord's CSP). Room is picked with `?room=<code>` (default `"default"`); player id is per-tab (sessionStorage) so multiple tabs = multiple players for testing.
+- Client connects via `client/src/net.js` (`useRoom`) to same-origin `/api/ws` in browsers and `/.proxy/api/ws` in Discord. The Node server serves both React and `/api` on port 5173 in development and production; development embeds Vite middleware with hot reload, with no separate frontend port. Browser room is picked with `?room=<code>` (default `"default"`); browser player id is per-tab (sessionStorage), with an in-memory fallback if storage is blocked.
 - Rules: chain length = min(rounds setting, player count); ≥2 players to start; host controls settings, start, and reveal stepping; drafts stream to the server so typed text counts on timeout; disconnected players are skipped for the turn.
 - The user plans to implement the image model integration themselves (hook point: the image step in `endTurn` in `server/game.js`).
-- `client/src/main.jsx` initializes the Discord SDK when launched with `frame_id`, preserving normal browser previews. It uses the user-provided Application ID `1553470711308353626`; authentication is deferred.
-- Discord identity and Activity instance room selection are not wired into multiplayer yet (room code should become the Activity instance id).
+- `client/src/session.js` initializes the Discord SDK only when launched with `frame_id`, then completes `identify` OAuth before joining. Default Application ID is `1553470711308353626` (override with `VITE_DISCORD_CLIENT_ID` and matching server `DISCORD_CLIENT_ID`). A shared initialization promise avoids duplicate SDK handshakes under React StrictMode.
+- Discord rooms use the SDK Activity instance ID in a separate namespace. The server verifies the access token via Discord's `/oauth2/@me` endpoint and derives player ID/display name from that response. Reconnection preserves a Discord user's seat while the room exists; ordinary browser play still needs no credentials.
+- `server/index.js` loads optional `server/.env`; `server/app.js` serves HTTP/WebSocket and `POST /api/token`; `server/discord.js` handles code exchange and identity verification. Set `DISCORD_CLIENT_SECRET` only on the server. Both directories include `.env.example`, and actual `.env` files are ignored. Root `README.md` documents local, Discord, and production setup.
 
 ## Commands
 ```
-cd server && npm install && npm run dev   # game server on :3001
-cd client && npm install && npm run dev   # http://localhost:5173 (open several tabs to play)
-cd client && npm run build                # then `cd server && npm start` serves everything on :3001
+npm run setup                            # install client and server dependencies
+npm run dev                              # one server at http://localhost:5173, including React hot reload
+npm run build && npm start               # build React, then serve app and /api on :5173
+npm test && npm run lint                  # client/server checks
 ```

@@ -1,23 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-// Per-tab identity so reloading keeps your seat, but separate tabs are separate players (handy for testing).
-function playerId() {
-  let id = sessionStorage.getItem('playerId')
-  if (!id) sessionStorage.setItem('playerId', (id = crypto.randomUUID()))
-  return id
-}
-
-export function savedName() {
-  try { return localStorage.getItem('name') ?? '' } catch { return '' }
-}
-
-export function saveName(name) {
-  try { localStorage.setItem('name', name) } catch { /* private mode */ }
-}
-
-// ?room=abc picks a room; everyone without one shares "default".
-// TODO: use the Discord Activity instance id once the Embedded App SDK is wired up.
-const ROOM = new URLSearchParams(location.search).get('room') ?? 'default'
+import { getSession, savedName, websocketUrl } from './session.js'
 
 // Keeps a WebSocket to the game server open and exposes the latest room state.
 export function useRoom() {
@@ -31,19 +13,32 @@ export function useRoom() {
     let timer
     let stopped = false
 
-    const connect = () => {
-      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`)
+    const connect = async () => {
+      let hello
+      try {
+        hello = await getSession()
+      } catch (err) {
+        if (stopped) return
+        setError(err.message || 'Could not connect to Discord. Close and reopen the Activity.')
+        setStatus('error')
+        return
+      }
+      if (stopped) return
+      const ws = new WebSocket(websocketUrl())
       wsRef.current = ws
       setStatus('connecting')
 
       ws.onopen = () => {
+        if (stopped) return ws.close()
         retry = 0
-        setStatus('open')
-        ws.send(JSON.stringify({ type: 'hello', room: ROOM, id: playerId(), name: savedName() }))
+        ws.send(JSON.stringify(hello.discord ? hello : { ...hello, name: savedName() }))
       }
       ws.onmessage = (e) => {
+        if (stopped) return
         const msg = JSON.parse(e.data)
         if (msg.type === 'state') {
+          setStatus('open')
+          setError(null)
           // msLeft -> local deadline, so the timer doesn't depend on client/server clocks agreeing.
           if (msg.state.play) msg.state.play.endsAt = Date.now() + msg.state.play.msLeft
           msg.state.players = msg.state.players.map((p) => ({ ...p, color: `var(--ctp-${p.color})` }))
@@ -55,7 +50,7 @@ export function useRoom() {
       ws.onclose = (e) => {
         if (stopped) return
         if (e.code === 4000) setError('You opened the game in another tab.')
-        if (e.code === 4000 || e.code === 4001) return setStatus('error')
+        if (e.code === 4000 || e.code === 4001 || e.code === 4002) return setStatus('error')
         setStatus('closed')
         timer = setTimeout(connect, Math.min(1000 * 2 ** retry++, 10_000))
       }

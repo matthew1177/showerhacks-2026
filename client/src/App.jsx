@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { saveName, useRoom } from './net'
+import { useRoom } from './net'
+import { saveName } from './session'
 import Guess from './screens/Guess'
 import Lobby from './screens/Lobby'
 import Prompt from './screens/Prompt'
