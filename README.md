@@ -1,8 +1,9 @@
 # PromptPhone
 
 A multiplayer prompt-and-guess game for the web and Discord Activities. React/Vite
-is in `client/`; the Node server in `server/` owns rooms and game state. Images are
-currently gradient placeholders.
+is in `client/`; the Node server in `server/` owns rooms and game state. An optional
+local SDXL-Turbo service generates images; gradient placeholders are used when
+the service is disabled or generation fails.
 
 ## Run locally
 
@@ -32,6 +33,33 @@ relative `/api` URLs; there is no separate frontend port or backend host to conf
 
 `PORT` changes the port for both the frontend and backend. The old `/ws` endpoint
 remains an alias for existing clients.
+
+## Local image generation (Apple Silicon)
+
+Install the image service dependencies once:
+
+```sh
+cd imagegen
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+Set `IMAGE_API_URL=http://127.0.0.1:8000` in `server/.env`, and put the same
+random `IMAGE_API_SECRET` (at least 16 characters) in both `server/.env` and
+`imagegen/.env`. Both files are ignored by Git. Restart the game server after
+changing its environment.
+
+Start the image service in a separate terminal, from `imagegen/`:
+
+```sh
+.venv/bin/python app.py
+```
+
+The model downloads on the first run. Startup loads it on a dedicated worker
+that also generates images one at a time. Keep this process running alongside
+the game server. It listens only on `127.0.0.1:8000`; the game server authenticates
+requests and serves generated PNGs through `/images/`, including Discord's
+`/.proxy` route. The next guessing timer starts after all images are ready.
 
 ## Connect the Discord Activity
 
@@ -125,6 +153,7 @@ at that hostname. Use a single server instance while room state is held in memor
 npm test
 npm run lint
 npm run build
+imagegen/.venv/bin/python -m unittest discover -s imagegen -p 'test_*.py'
 ```
 
 Tests use simulated Discord responses and real local HTTP/WebSocket connections

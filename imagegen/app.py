@@ -9,15 +9,15 @@ The game server only requests an image when a real game turn ends, so playing is
 Run:  .venv/bin/python app.py
 """
 
+import asyncio
 import os
 import secrets
-import threading
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, Field
-
-from model import generate
 
 # Minimal .env loader so the secret can live in imagegen/.env (gitignored).
 env_file = Path(__file__).with_name(".env")
@@ -33,9 +33,25 @@ if len(SECRET) < 16:
 
 ART_STYLES = {"Any", "Photo", "Cartoon", "Pixel art", "Oil painting", "Claymation"}
 
+
+def load_generator():
+    # MLX streams belong to their creating thread, including model initialization.
+    from model import generate
+
+    return generate
+
+
+@asynccontextmanager
+async def lifespan(app):
+    # A single worker keeps all MLX work on one thread and serializes images.
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="image-model") as worker:
+        app.state.worker = worker
+        app.state.generate = await asyncio.get_running_loop().run_in_executor(worker, load_generator)
+        yield
+
+
 # No public docs pages: there's nothing here for outsiders to discover.
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-gpu_lock = threading.Lock()  # one image at a time so the model doesn't run out of memory
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 
 class GenerateRequest(BaseModel):
@@ -49,11 +65,12 @@ def require_game_server(authorization: str = Header(default="")):
 
 
 @app.post("/generate", dependencies=[Depends(require_game_server)])
-def generate_image(req: GenerateRequest):
+async def generate_image(req: GenerateRequest):
     if req.style not in ART_STYLES:
         raise HTTPException(status_code=422, detail="unknown style")
-    with gpu_lock:
-        png = generate(req.prompt, req.style)
+    png = await asyncio.get_running_loop().run_in_executor(
+        app.state.worker, app.state.generate, req.prompt, req.style
+    )
     return Response(png, media_type="image/png")
 
 
