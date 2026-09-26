@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { WebSocket, WebSocketServer } from 'ws'
 import { Room } from './game.js'
 import { createDiscordAuth, DiscordError } from './discord.js'
-import { getImage } from './images.js'
+import { deleteImage, generateImage, getImage, imagesEnabled, imageServiceStatus } from './images.js'
 
 const DIST = fileURLToPath(new URL('../client/dist/', import.meta.url))
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' }
@@ -39,8 +39,18 @@ function requestPath(url) {
   return new URL(url, 'http://localhost').pathname.replace(/^\/\.proxy(?=\/)/, '')
 }
 
+function isDirectLocalRequest(req) {
+  const local = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
+  if (!local.has(req.socket.remoteAddress) || req.url.startsWith('/.proxy/')) return false
+  if (Object.keys(req.headers).some((key) => key.startsWith('x-forwarded-') || ['forwarded', 'cf-connecting-ip', 'cf-ray'].includes(key))) return false
+  const host = req.headers.host
+  if (!host || !['localhost', '127.0.0.1', '[::1]'].includes(new URL(`http://${host}`).hostname)) return false
+  return (!req.headers.origin || req.headers.origin === `http://${host}`) && req.headers['sec-fetch-site'] !== 'cross-site'
+}
+
 export function createGameServer({ discord = createDiscordAuth(), frontend, fetchAvatar = fetch } = {}) {
   const rooms = new Map()
+  let testingImage = false
   const server = createServer(async (req, res) => {
     try {
       const pathname = requestPath(req.url)
@@ -53,6 +63,41 @@ export function createGameServer({ discord = createDiscordAuth(), frontend, fetc
         return res.end(png)
       }
       if (pathname === '/api' && req.method === 'GET') return json(res, 200, { status: 'ok' })
+      if (pathname === '/api/image-test') {
+        if (!isDirectLocalRequest(req)) return json(res, 403, { error: 'Open the image test page on localhost to use it.' })
+        if (req.method === 'GET') return json(res, 200, await imageServiceStatus())
+        if (req.method !== 'POST') {
+          res.setHeader('Allow', 'GET, POST')
+          return json(res, 405, { error: 'Use POST to generate an image.' })
+        }
+        if (!req.headers['content-type']?.startsWith('application/json')) return json(res, 415, { error: 'Expected a JSON request body.' })
+        const body = await readJson(req)
+        const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : ''
+        const style = body?.style ?? 'Any'
+        const creativity = body?.creativity ?? 50
+        if (!prompt || prompt.length > 200 || !['Any', 'Photo', 'Cartoon', 'Pixel art', 'Oil painting', 'Claymation'].includes(style)
+          || !Number.isInteger(creativity) || creativity < 0 || creativity > 100) {
+          return json(res, 422, { error: 'Enter a prompt of 1–200 characters, a valid art style, and creativity from 0–100.' })
+        }
+        if (!imagesEnabled()) return json(res, 503, { error: 'The image service is not configured.' })
+        if (testingImage) return json(res, 409, { error: 'Another test image is still generating. Try again when it finishes.' })
+        testingImage = true
+        const started = Date.now()
+        try {
+          const id = await generateImage(prompt, style, creativity)
+          const png = getImage(id)
+          deleteImage(id)
+          res.writeHead(200, {
+            'Content-Type': 'image/png', 'Cache-Control': 'no-store',
+            'X-Generation-Time-Ms': String(Date.now() - started),
+          })
+          return res.end(png)
+        } catch {
+          return json(res, 503, { error: 'Chroma could not finish this image. Check that the image service is running, then try again.' })
+        } finally {
+          testingImage = false
+        }
+      }
       if (pathname.startsWith('/api/avatars/')) {
         if (req.method !== 'GET') {
           res.setHeader('Allow', 'GET')

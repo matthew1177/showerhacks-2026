@@ -1,5 +1,5 @@
 // Client for the Python image API (../imagegen). Only this server talks to it, using a shared
-// secret, so images can only be made by playing the game. Generated PNGs are kept in memory and
+// secret. Game turns and the local test page can generate images. PNGs are kept in memory and
 // served same-origin at /images/<id>.png (Discord's CSP blocks outside image URLs).
 
 import { randomUUID } from 'node:crypto'
@@ -8,14 +8,38 @@ import { randomUUID } from 'node:crypto'
 // IMAGE_API_URL is e.g. http://127.0.0.1:8000; unset = placeholder gradients.
 export const imagesEnabled = () => Boolean(process.env.IMAGE_API_URL && process.env.IMAGE_API_SECRET)
 
-const images = new Map() // id -> PNG Buffer
+export async function imageServiceStatus() {
+  if (!imagesEnabled()) return { ready: false, message: 'The image service is not configured.' }
+  try {
+    const response = await fetch(`${process.env.IMAGE_API_URL}/health`, {
+      headers: { authorization: `Bearer ${process.env.IMAGE_API_SECRET}` },
+      signal: AbortSignal.timeout(3000),
+    })
+    if (response.status === 401) return { ready: false, message: 'The image service secret does not match the game server.' }
+    if (!response.ok) throw new Error('Image service unavailable')
+    return await response.json()
+  } catch {
+    return { ready: false, message: 'Chroma is loading or the image service is offline. Checking again automatically.' }
+  }
+}
 
-export async function generateImage(prompt, style, creativity) {
+const images = new Map() // id -> PNG Buffer
+let generationQueue = Promise.resolve()
+
+export function generateImage(prompt, style, creativity) {
+  // The local GPU serves one image at a time. Start each timeout only when its
+  // request is sent, so later players don't time out while waiting in the queue.
+  const result = generationQueue.then(() => requestImage(prompt, style, creativity))
+  generationQueue = result.catch(() => {})
+  return result
+}
+
+async function requestImage(prompt, style, creativity) {
   const res = await fetch(`${process.env.IMAGE_API_URL}/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.IMAGE_API_SECRET}` },
     body: JSON.stringify({ prompt, style, creativity }),
-    signal: AbortSignal.timeout(Number(process.env.IMAGE_TIMEOUT_MS) || 60_000),
+    signal: AbortSignal.timeout(Number(process.env.IMAGE_TIMEOUT_MS) || 300_000),
   })
   if (!res.ok) throw new Error(`image API responded ${res.status}`)
   const id = randomUUID()

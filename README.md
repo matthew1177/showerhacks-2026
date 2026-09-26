@@ -2,7 +2,7 @@
 
 A multiplayer prompt-and-guess game for the web and Discord Activities. React/Vite
 is in `client/`; the Node server in `server/` owns rooms and game state. An optional
-local SDXL-Turbo service generates images; gradient placeholders are used when
+local Chroma1-HD service generates images; gradient placeholders are used when
 the service is disabled or generation fails.
 
 ## Run locally
@@ -61,11 +61,48 @@ Start the image service in a separate terminal, from `imagegen/`:
 .venv/bin/python app.py
 ```
 
-The model downloads on the first run. Startup loads it on a dedicated worker
-that also generates images one at a time. Keep this process running alongside
+The [Chroma1-HD model](https://huggingface.co/lodestones/Chroma1-HD) and its text
+encoder download on the first run (roughly 28 GB). Fast mode also downloads a pinned
+[Chroma Flash adapter](https://huggingface.co/darian23/Chroma1-Flash-LoRA) (469 MB),
+which approximates Chroma1-Flash and is fused once during startup. It runs through
+PyTorch/Diffusers on the Mac's GPU; allow substantial unified memory for the weights
+and inference. Startup loads and warms it on a dedicated worker before accepting
+requests, then loads the scoring model. Wait for
+`Application startup complete` before playing. Keep this process running alongside
 the game server. It listens only on `127.0.0.1:8000`; the game server authenticates
 requests and serves generated PNGs through `/images/`, including Discord's
 `/.proxy` route. The next guessing timer starts after all images are ready.
+
+Images default to 384×384 with six sampling steps and `IMAGE_FLASH=1`. This trades
+resolution and detail for short game turns while keeping Chroma. On Apple Silicon,
+the service uses float16, shorter text padding, Metal fast math, and synchronization
+between sampling steps to keep the GPU queue from building up. Explicit
+`PYTORCH_MPS_FAST_MATH` / `PYTORCH_MPS_PREFER_METAL` environment values take precedence.
+
+On the M3 Max / 128 GB development Mac, six different prompts covering every art
+style took **5.9–6.6 seconds each** through `/api/image-test` after startup (September
+26, 2026). The average was 6.24 seconds, including PNG encoding and the HTTP response.
+This is a local measurement, not a guaranteed deadline on other hardware or under load.
+
+Set `IMAGE_SIZE` (a multiple of 16, at least 256) and `IMAGE_STEPS` in `imagegen/.env`
+to adjust speed and quality, then restart the image service. For the original HD
+mode, set `IMAGE_FLASH=0`, `IMAGE_SIZE=512`, and `IMAGE_STEPS=20`; it is much slower.
+Flash mode disables classifier-free guidance and negative prompting as required
+by the adapter. Startup/download time and time spent waiting behind other requests
+are separate from per-image generation time; hardware and competing GPU work affect latency.
+The game server queues image requests one at a time, with a five-minute timeout
+per image rather than per round; `IMAGE_TIMEOUT_MS` in `server/.env` overrides it.
+Existing art-style and creativity settings still apply.
+
+### Test a single image
+
+Open [the image playground](http://localhost:5173/image-test) while the game and
+image servers are running. Enter a prompt, choose an art style and creativity,
+then generate, preview, or save a PNG without starting a multiplayer game.
+The page checks model readiness automatically and shows elapsed generation time.
+Its API is available only through a direct localhost connection; it is not
+available through the public tunnel or Discord proxy. The shared secret stays
+on the server. If you changed `PORT`, use that port in the URL.
 
 ## Connect the Discord Activity
 

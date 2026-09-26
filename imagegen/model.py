@@ -1,20 +1,25 @@
-"""SDXL-Turbo on Apple Silicon via MLX. The API calls generate() once per image.
-
-The SDXL implementation is Apple's mlx-examples `stable_diffusion` package, vendored at
-imagegen/stable_diffusion (MIT). Weights (~7GB) download from Hugging Face on first run.
-"""
+"""Local Chroma1-HD inference. Load and generate on the API's single model worker."""
 
 import io
+import logging
+import os
 import random
+import time
 
-import mlx.core as mx
-import mlx.nn as nn
-import numpy as np
-from PIL import Image
+# Read before importing torch; explicit environment settings still take precedence.
+os.environ.setdefault("PYTORCH_MPS_FAST_MATH", "1")
+os.environ.setdefault("PYTORCH_MPS_PREFER_METAL", "1")
 
-from stable_diffusion import StableDiffusionXL
+import torch
+from diffusers import ChromaPipeline
 
-STEPS = 2  # SDXL-Turbo is distilled for 1-4 steps with no CFG
+MODEL_ID = "lodestones/Chroma1-HD"
+FLASH = os.environ.get("IMAGE_FLASH", "1") == "1"
+STEPS = int(os.environ.get("IMAGE_STEPS", "6" if FLASH else "20"))
+SIZE = int(os.environ.get("IMAGE_SIZE", "384" if FLASH else "512"))
+if STEPS < 1 or SIZE < 256 or SIZE % 16:
+    raise ValueError("IMAGE_STEPS must be positive; IMAGE_SIZE must be at least 256 and divisible by 16.")
+logger = logging.getLogger("uvicorn.error")
 STYLE_SUFFIX = {
     "Any": "",
     "Photo": ", photograph, realistic, detailed",
@@ -39,24 +44,66 @@ def creative_suffix(creativity: int) -> str:
     twists = round((creativity - 50) / 25)  # 0 up to 62, 1 up to 87, then 2
     return "".join(f", {t}" for t in random.sample(TWISTS, max(twists, 0)))
 
-# Load once at import so the first turn doesn't pay for it. Quantizing (as mlx-examples does
-# with -q) keeps SDXL within an 8GB machine's memory.
-_sd = StableDiffusionXL("stabilityai/sdxl-turbo", float16=True)
-nn.quantize(_sd.text_encoder_1, class_predicate=lambda _, m: isinstance(m, nn.Linear))
-nn.quantize(_sd.text_encoder_2, class_predicate=lambda _, m: isinstance(m, nn.Linear))
-nn.quantize(_sd.unet, group_size=32, bits=8)
-_sd.ensure_models_are_loaded()
+_pipeline = None
 
 
+@torch.inference_mode()
+def load_model():
+    global _pipeline
+    if _pipeline is not None:
+        return
+    device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = {"cpu": torch.float32, "mps": torch.float16, "cuda": torch.bfloat16}[device]
+    logger.info("Loading %s on %s (first run downloads the model weights)", MODEL_ID, device)
+    pipeline = ChromaPipeline.from_pretrained(MODEL_ID, dtype=dtype, use_safetensors=True)
+    if FLASH:
+        from chroma_flash import fuse_flash_adapter
+
+        logger.info("Fusing Chroma Flash adapter")
+        fuse_flash_adapter(pipeline.transformer)
+    pipeline.to(device)
+    pipeline.vae.enable_tiling()
+    # Pay for the first GPU kernels at startup, before /health reports ready.
+    logger.info("Warming Chroma up")
+    _render(pipeline, "A red apple on a wooden table", seed=0)
+    _pipeline = pipeline
+    logger.info("Chroma ready: %sx%s, %s steps, Flash %s", SIZE, SIZE, STEPS, FLASH)
+
+
+def _finish_mps_step(pipeline, step, timestep, callback_kwargs):
+    # Keep the GPU queue bounded. Letting Metal operations build up between
+    # steps increased latency substantially in the local Chroma benchmarks.
+    torch.mps.synchronize()
+    return callback_kwargs
+
+
+def _render(pipeline, text, seed):
+    # Short prompts do not need 256 padding tokens. Retain room for long prompts
+    # and style/creativity suffixes, including non-English text, without truncating.
+    token_count = len(pipeline.tokenizer(text).input_ids)
+    sequence_length = max(64, min(512, ((token_count + 63) // 64) * 64))
+    return pipeline(
+        prompt=text,
+        negative_prompt=None if FLASH else "blurry, low quality, distorted",
+        height=SIZE,
+        width=SIZE,
+        num_inference_steps=STEPS,
+        guidance_scale=1.0 if FLASH else 3.0,
+        max_sequence_length=sequence_length,
+        generator=torch.Generator("cpu").manual_seed(seed),
+        callback_on_step_end=_finish_mps_step if pipeline.device.type == "mps" else None,
+    ).images[0]
+
+
+@torch.inference_mode()
 def generate(prompt: str, style: str, creativity: int = 50) -> bytes:
-    """Return 512x512 PNG bytes for `prompt` in the lobby's art style and creativity."""
+    """Return PNG bytes for `prompt` in the lobby's art style and creativity."""
+    load_model()
+    started = time.monotonic()
     text = prompt + creative_suffix(creativity) + STYLE_SUFFIX.get(style, "")
-    latents = _sd.generate_latents(text, n_images=1, cfg_weight=0.0, num_steps=STEPS)
-    for x_t in latents:
-        mx.eval(x_t)
-    image = _sd.decode(x_t)
-    image = (image[0] * 255).astype(mx.uint8)
+    image = _render(_pipeline, text, random.getrandbits(63))
 
     buf = io.BytesIO()
-    Image.fromarray(np.array(image)).save(buf, format="PNG")
+    image.save(buf, format="PNG")
+    logger.info("Chroma generated an image in %.1fs", time.monotonic() - started)
     return buf.getvalue()

@@ -1,10 +1,9 @@
 """Image API: prompt in, PNG out; PNG in, DINOv2 embedding out (for scoring guesses).
 
-Only the game server (../server) is meant to call this, never players' browsers. To keep people
-outside the game from using it for free images:
+Only the game server (../server) is meant to call this, never players' browsers:
   - it listens on localhost only, so it isn't reachable from the internet, and
   - every request must carry the shared secret IMAGE_API_SECRET, which only the game server knows.
-The game server only requests an image when a real game turn ends, so playing is the only way in.
+The server requests images for game turns and its local image testing page.
 
 Run:  .venv/bin/python app.py
 """
@@ -35,9 +34,9 @@ ART_STYLES = {"Any", "Photo", "Cartoon", "Pixel art", "Oil painting", "Claymatio
 
 
 def load_generator():
-    # MLX streams belong to their creating thread, including model initialization.
-    from model import generate
+    from model import generate, load_model
 
+    load_model()
     return generate
 
 
@@ -49,7 +48,7 @@ def load_scorer():
 
 @asynccontextmanager
 async def lifespan(app):
-    # A single worker keeps all MLX work on one thread and serializes images. DINOv2 scoring runs
+    # A single worker loads the image model and serializes generation. DINOv2 scoring runs
     # on its own worker (PyTorch on CPU) so embedding one image doesn't wait behind the next.
     loop = asyncio.get_running_loop()
     with (
@@ -102,6 +101,14 @@ async def embed_image(request: Request):
     except Exception:
         raise HTTPException(status_code=422, detail="unreadable image")
     return {"embedding": embedding}
+
+
+@app.get("/health", dependencies=[Depends(require_game_server)])
+async def model_status():
+    # Startup finishes loading the model before this endpoint becomes reachable.
+    from model import FLASH, MODEL_ID, SIZE, STEPS
+
+    return {"ready": True, "model": MODEL_ID, "size": SIZE, "steps": STEPS, "flash": FLASH}
 
 
 if __name__ == "__main__":
