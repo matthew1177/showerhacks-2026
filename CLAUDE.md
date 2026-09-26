@@ -12,7 +12,8 @@ A Gartic Phone–style party game, but with an AI image model doing the drawing:
 5. At the end, every chain is revealed step by step (prompt → image → guess → image → …).
 
 ## Platform
-- Must be **Discord friendly**: intended to run as a Discord Activity (embedded iframe via the Discord Embedded App SDK), so the UI has to work at small/odd sizes (PiP, mobile portrait), use Discord's dark palette, and avoid loading external resources directly (Discord's CSP only allows proxied URLs under `/.proxy/`), so no web fonts or CDN assets.
+- Must be **Discord friendly**: intended to run as a Discord Activity (embedded iframe via the Discord Embedded App SDK), so the UI has to work at small/odd sizes (PiP, mobile portrait) and avoid loading external resources directly (Discord's CSP only allows proxied URLs under `/.proxy/`), so no web fonts or CDN assets.
+- The user requested [Catppuccin colors](https://github.com/catppuccin/catppuccin) for the UI, replacing the original Discord palette. The current theme uses **Mocha** with mauve accents; shared color tokens live in `client/src/index.css`.
 - Frontend: **React** (Vite) in `client/`.
 
 ## Current status

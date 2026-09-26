@@ -1,12 +1,12 @@
 // Mock data so the UI can be built before the backend / Discord SDK exist.
 
 export const PLAYERS = [
-  { id: '1', name: 'jaden', color: '#5865F2', host: true, done: true },
-  { id: '2', name: 'matthew', color: '#EB459E', done: true },
-  { id: '3', name: 'priya', color: '#57F287', done: false },
-  { id: '4', name: 'leo', color: '#FEE75C', done: true },
-  { id: '5', name: 'sam', color: '#ED4245', done: false },
-  { id: '6', name: 'kai', color: '#3BA5DC', done: true },
+  { id: '1', name: 'jaden', color: 'var(--ctp-mauve)', host: true, done: true },
+  { id: '2', name: 'matthew', color: 'var(--ctp-pink)', done: true },
+  { id: '3', name: 'priya', color: 'var(--ctp-green)', done: false },
+  { id: '4', name: 'leo', color: 'var(--ctp-yellow)', done: true },
+  { id: '5', name: 'sam', color: 'var(--ctp-red)', done: false },
+  { id: '6', name: 'kai', color: 'var(--ctp-blue)', done: true },
 ]
 
 export const ME = PLAYERS[0]
@@ -28,13 +28,16 @@ export const PROMPT_IDEAS = [
   'a haunted vending machine at 3am',
 ]
 
-// Stand-in for a generated image: a seeded gradient so each step looks different.
+// Stand-in for a generated image: a seeded Catppuccin gradient so each step looks different.
+const IMAGE_COLORS = ['mauve', 'pink', 'peach', 'yellow', 'green', 'teal', 'blue', 'lavender']
+
 export function placeholderImage(seed) {
   let h = 0
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) % 360
-  return `radial-gradient(circle at 30% 30%, hsl(${h} 80% 65%), transparent 55%),
-    radial-gradient(circle at 75% 70%, hsl(${(h + 120) % 360} 75% 55%), transparent 50%),
-    linear-gradient(135deg, hsl(${(h + 220) % 360} 45% 25%), hsl(${(h + 260) % 360} 50% 15%))`
+  const color = (offset) => `var(--ctp-${IMAGE_COLORS[(h + offset) % IMAGE_COLORS.length]})`
+  return `radial-gradient(circle at 30% 30%, ${color(0)}, transparent 55%),
+    radial-gradient(circle at 75% 70%, ${color(3)}, transparent 50%),
+    linear-gradient(135deg, var(--ctp-surface0), var(--ctp-crust))`
 }
 
 export const CHAIN = {
