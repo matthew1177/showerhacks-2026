@@ -201,6 +201,7 @@ test('Activity players share a game, receive verified identities, and recover th
   const alice = await connect('/.proxy/api/ws')
   const first = await send(alice, { ...hello('alice'), id: 'forged', name: 'forged', nickname: 'forged', avatarUrl: 'https://example.com/forged.png' })
   assert.equal(first.state.me, 'discord:111')
+  assert.equal(first.state.canEditName, false)
   assert.equal(first.state.players[0].name, aliceNickname)
   assert.equal(first.state.players[0].avatarUrl, `/api/avatars/guilds/999/users/111/avatars/${serverAvatar}.png`)
   alice.send(JSON.stringify({ type: 'name', name: 'forged' }))
@@ -212,8 +213,11 @@ test('Activity players share a game, receive verified identities, and recover th
   assert.equal(second.state.players.length, 2)
   assert.equal(second.state.players[1].name, 'bob')
   assert.equal(second.state.players[0].avatarUrl, first.state.players[0].avatarUrl)
+  const configured = await send(alice, { type: 'settings', settings: { rounds: '4' } })
+  assert.equal(configured.state.settings.rounds, 4)
   const started = await send(alice, { type: 'start' }, (msg) => msg.state?.phase === 'play')
   assert.equal(started.state.play.task.kind, 'prompt')
+  assert.equal(started.state.play.turns, 4)
   await send(alice, { type: 'submit', text: 'a dancing cat' }, (msg) => msg.state?.play?.submitted === 'a dancing cat')
 
   const replaced = once(alice, 'close')
@@ -229,9 +233,16 @@ test('Activity players share a game, receive verified identities, and recover th
   assert.equal((await replaced)[0], 4000)
 
   await send(bob, { type: 'submit', text: 'a sleepy dog' }, (msg) => msg.state?.play?.turn === 2)
-  await send(rejoined, { type: 'submit', text: 'guess one' }, (msg) => msg.state?.play?.submitted === 'guess one')
-  const finished = await send(bob, { type: 'submit', text: 'guess two' }, (msg) => msg.state?.phase === 'reveal')
+  let finished
+  for (let round = 2; round <= 4; round++) {
+    const text = `Alice guess ${round}`
+    await send(rejoined, { type: 'submit', text }, (msg) => msg.state?.play?.submitted === text)
+    finished = await send(bob, { type: 'submit', text: `Bob guess ${round}` }, (msg) => round === 4
+      ? msg.state?.phase === 'reveal'
+      : msg.state?.play?.turn === round + 1)
+  }
   assert.equal(finished.state.reveal.steps[0].text, 'a dancing cat')
+  assert.equal(finished.state.reveal.total, 7)
 })
 
 test('different Activity instances and website rooms stay separate', async (t) => {
@@ -245,13 +256,43 @@ test('different Activity instances and website rooms stay separate', async (t) =
   const browser = await send(guest, { type: 'hello', room: 'discord:activity-one', id: 'discord:111', name: 'Guest', avatarUrl: 'https://example.com/forged.png' })
   assert.equal(browser.state.code, 'default')
   assert.equal(browser.state.players.length, 1)
-  assert.equal(browser.state.players[0].name, 'Player 1')
+  assert.equal(browser.state.canEditName, true)
+  assert.equal(browser.state.players[0].name, 'Guest')
   assert.equal(browser.state.players[0].avatarUrl, null)
-  guest.send(JSON.stringify({ type: 'name', name: 'Custom guest name' }))
+  await send(guest, { type: 'name', name: 'Custom guest name' })
   const anotherGuest = await connect()
   const shared = await send(anotherGuest, { type: 'hello', room: 'default', id: 'guest-two', name: 'Guest Two' })
   assert.equal(shared.state.players.length, 2)
-  assert.deepEqual(shared.state.players.map((player) => player.name), ['Player 1', 'Player 2'])
+  assert.deepEqual(shared.state.players.map((player) => player.name), ['Custom guest name', 'Guest Two'])
+})
+
+test('browser names are normalized, shared, and retained when a connection is replaced', async (t) => {
+  const { connect } = await fixture(t)
+  const host = await connect()
+  const first = await send(host, { type: 'hello', room: 'names', id: 'host' })
+  assert.equal(first.state.players[0].name, 'Player 1')
+  const guest = await connect()
+  await send(guest, { type: 'hello', room: 'names', id: 'guest', name: '  Guest\n Two  ' })
+  const renamedOnHost = nextMessage(host, (msg) => msg.state?.players[1]?.name === 'My web name')
+  const renamed = await send(guest, { type: 'name', name: '  My\n web   name  ', id: 'host' })
+  assert.equal(renamed.state.players[0].name, 'Player 1', 'guests can only rename themselves')
+  assert.equal(renamed.state.players[1].name, 'My web name')
+  await renamedOnHost
+
+  for (const name of ['', '   ', null, 123]) {
+    host.send(JSON.stringify({ type: 'name', name }))
+    const unchanged = await send(host, { type: 'settings', settings: {} })
+    assert.equal(unchanged.state.players[0].name, 'Player 1')
+  }
+  const limited = await send(host, { type: 'name', name: '🎨'.repeat(40) })
+  assert.equal(limited.state.players[0].name, '🎨'.repeat(32))
+
+  const replaced = once(guest, 'close')
+  const rejoined = await connect()
+  const recovered = await send(rejoined, { type: 'hello', room: 'names', id: 'guest' })
+  assert.equal(recovered.state.players.length, 2)
+  assert.equal(recovered.state.players[1].name, 'My web name')
+  assert.equal((await replaced)[0], 4000)
 })
 
 test('rejected Discord joins close with an error instead of becoming anonymous players', async (t) => {

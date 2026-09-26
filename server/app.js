@@ -139,7 +139,7 @@ export function createGameServer({ discord = createDiscordAuth(), frontend, fetc
         joining = true
         try {
           let code = typeof msg.room === 'string' && /^[\w-]{1,64}$/.test(msg.room) ? msg.room : 'default'
-          let identity = { id: msg.id }
+          let identity = { id: msg.id, name: msg.name }
           if ('discord' in msg) {
             const instanceId = msg.discord?.instanceId
             if (typeof instanceId !== 'string' || !/^[\w-]{1,128}$/.test(instanceId)) {

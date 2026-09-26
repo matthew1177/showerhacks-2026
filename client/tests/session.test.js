@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { backendUrl, initializeSession, websocketUrl } from '../src/session.js'
+import { backendUrl, initializeSession, savedName, saveName, websocketUrl } from '../src/session.js'
 
 const embedded = new URL('https://1553470711308353626.discordsays.com/?frame_id=frame&room=ignored')
 
@@ -65,6 +65,25 @@ for (const guildId of ['999', null]) {
     assert.deepEqual(calls, ['authorize', 'exchange', 'authenticate'])
   })
 }
+
+test('browser names are saved per tab with a fallback when storage is blocked', (t) => {
+  const stored = new Map()
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'sessionStorage', original)
+    else delete globalThis.sessionStorage
+  })
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: {
+    getItem: (key) => stored.get(key) ?? null,
+    setItem: (key, value) => stored.set(key, value),
+  } })
+  saveName('Web player')
+  assert.equal(stored.get('playerName'), 'Web player')
+  assert.equal(savedName(), 'Web player')
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, get() { throw new Error('Storage blocked') } })
+  saveName('Offline name')
+  assert.equal(savedName(), 'Offline name')
+})
 
 test('OAuth failures surface the server error instead of joining a guest room', async () => {
   await assert.rejects(initializeSession({

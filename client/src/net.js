@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getSession, websocketUrl } from './session.js'
+import { getSession, savedName, saveName, websocketUrl } from './session.js'
 
 // Keeps a WebSocket to the game server open and exposes the latest room state.
 export function useRoom() {
@@ -31,7 +31,7 @@ export function useRoom() {
       ws.onopen = () => {
         if (stopped) return ws.close()
         retry = 0
-        ws.send(JSON.stringify(hello))
+        ws.send(JSON.stringify(hello.discord ? hello : { ...hello, name: savedName() }))
       }
       ws.onmessage = (e) => {
         if (stopped) return
@@ -43,6 +43,8 @@ export function useRoom() {
           // msLeft is null while images are generating (timer not started yet).
           if (msg.state.play) msg.state.play.endsAt = msg.state.play.msLeft == null ? null : Date.now() + msg.state.play.msLeft
           msg.state.players = msg.state.players.map((p) => ({ ...p, color: `var(--ctp-${p.color})` }))
+          const me = msg.state.players.find((p) => p.id === msg.state.me)
+          if (msg.state.canEditName && me) saveName(me.name)
           setState(msg.state)
         } else if (msg.type === 'error') {
           setError(msg.message)

@@ -15,9 +15,15 @@ npm run dev
 ```
 
 Open `http://localhost:5173/?room=friends` in multiple independent tabs to play.
-Browser players use a per-tab identity and an assigned name such as `Player 1`. Everyone with the
+Browser players use a per-tab identity and can change **Your name** in the lobby.
+Names are remembered in the current tab; new players start as `Player 1`, etc. Everyone with the
 same room code joins together; omitting the code uses `default`. Browser play
 does not require Discord credentials.
+
+The host's **Rounds** setting is the total number of turns: everyone writes a
+prompt in round 1, then guesses an image in each remaining round. Chains rotate
+through the players again if there are more rounds than players. Choosing six
+rounds with two players therefore plays all six rounds before the reveal.
 
 One Node process serves the React app and backend on the same port. In development,
 Vite runs inside that server to provide React hot reload. The frontend calls
@@ -103,7 +109,7 @@ tokens stay in memory and are sent in the initial WebSocket message, not in URLs
 
 Rooms use the Activity instance ID, so separate Activities cannot accidentally
 share the browser's default lobby. Discord users keep the same player identity
-on reconnect; opening a second connection replaces the old one. Names cannot be
+on reconnect; opening a second connection replaces the old one. Discord names cannot be
 edited in the game. Change your nickname in Discord and reopen the Activity to
 refresh it; direct-message Activities use your display name or username.
 Avatars use your server profile picture when set, then your account picture or

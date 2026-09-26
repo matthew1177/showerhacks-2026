@@ -50,6 +50,7 @@ export default function App() {
           hostId={state.hostId}
           settings={state.settings}
           onSettings={(settings) => send('settings', { settings })}
+          onName={state.canEditName ? (name) => send('name', { name }) : undefined}
           onStart={() => send('start')}
         />
       )}

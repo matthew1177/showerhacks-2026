@@ -3,6 +3,16 @@ import { DiscordSDK } from '@discord/embedded-app-sdk'
 const CLIENT_ID = import.meta.env?.VITE_DISCORD_CLIENT_ID || '1553470711308353626'
 let sessionPromise
 let guestId
+let guestName = ''
+
+export function savedName() {
+  try { return sessionStorage.getItem('playerName') || guestName } catch { return guestName }
+}
+
+export function saveName(name) {
+  guestName = name
+  try { sessionStorage.setItem('playerName', name) } catch { /* Keep the name in memory if storage is blocked. */ }
+}
 
 function playerId() {
   if (guestId) return guestId

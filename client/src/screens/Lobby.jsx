@@ -1,8 +1,15 @@
+import { useState } from 'react'
 import { Avatar } from '../components/ui'
 import { ART_STYLES } from '../mock'
 
-export default function Lobby({ players, me, isHost, hostId, settings, onSettings, onStart }) {
+export default function Lobby({ players, me, isHost, hostId, settings, onSettings, onName, onStart }) {
+  const [name, setName] = useState(null)
   const set = (k) => (e) => onSettings({ ...settings, [k]: e.target.value })
+  const commitName = () => {
+    const next = name?.replace(/\s+/g, ' ').trim()
+    if (next && next !== me.name) onName(next)
+    setName(null)
+  }
 
   return (
     <div className="screen lobby">
@@ -24,6 +31,27 @@ export default function Lobby({ players, me, isHost, hostId, settings, onSetting
               </li>
             ))}
           </ul>
+          {onName && (
+            <label className="field">
+              <span>Your name</span>
+              <input
+                className="name-input"
+                value={name ?? me.name}
+                maxLength={32}
+                autoComplete="nickname"
+                onChange={(e) => setName(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              />
+            </label>
+          )}
+          <div className="lobby__cta">
+            {!isHost
+              ? <p className="muted">Waiting for the host to start…</p>
+              : players.length < 2
+                ? <p className="muted">Need at least 2 players to start.</p>
+                : <button className="btn btn--primary btn--lg" onClick={onStart}>Start game</button>}
+          </div>
         </section>
 
         <section className="card">
@@ -59,14 +87,6 @@ export default function Lobby({ players, me, isHost, hostId, settings, onSetting
             </div>
           </div>
         </section>
-      </div>
-
-      <div className="lobby__cta">
-        {!isHost
-          ? <p className="muted">Waiting for the host to start…</p>
-          : players.length < 2
-            ? <p className="muted">Need at least 2 players to start.</p>
-            : <button className="btn btn--primary btn--lg" onClick={onStart}>Start game</button>}
       </div>
     </div>
   )

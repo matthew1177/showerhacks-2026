@@ -16,10 +16,13 @@ const GRACE_MS = 1000 // extra time for last-second drafts to arrive
 const TIMED_OUT = '(ran out of time)'
 
 const clean = (s, max) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, max) : '')
+const cleanName = (name) => typeof name === 'string' ? [...name.replace(/\s+/g, ' ').trim()].slice(0, MAX_NAME).join('') : ''
 
 export class Room {
   constructor(code) {
     this.code = code
+    // Discord room codes are reserved by the server after identity verification.
+    this.canEditName = !code.startsWith('discord:')
     this.players = [] // { id, name, avatarUrl, color, connected }
     this.sockets = new Map() // playerId -> ws
     this.hostId = null
@@ -39,7 +42,7 @@ export class Room {
 
   join(ws, id, name, avatarUrl = null) {
     let player = this.players.find((p) => p.id === id)
-    const displayName = typeof name === 'string' ? [...name.trim()].slice(0, MAX_NAME).join('') : ''
+    const displayName = cleanName(name)
     if (!player) {
       if (this.players.length >= MAX_PLAYERS) return null
       const used = new Set(this.players.map((p) => p.color))
@@ -94,6 +97,14 @@ export class Room {
   handle(id, msg) {
     const isHost = id === this.hostId
     switch (`${this.phase}:${msg.type}`) {
+      case 'lobby:name': {
+        if (!this.canEditName) return
+        const player = this.players.find((p) => p.id === id)
+        const name = cleanName(msg.name)
+        if (!player || !name) return
+        player.name = name
+        break
+      }
       case 'lobby:settings':
         if (isHost) this.updateSettings(msg.settings ?? {})
         break
@@ -143,8 +154,8 @@ export class Room {
     this.phase = 'play'
     this.game = {
       order,
-      // Each player works on each chain at most once, so the chain can't be longer than the player count.
-      turns: Math.min(this.settings.rounds, order.length),
+      // Chains keep rotating when the chosen round count exceeds the player count.
+      turns: this.settings.rounds,
       turn: 0,
       chains: order.map((ownerId) => ({ ownerId, steps: [] })),
       submissions: new Map(),
@@ -253,6 +264,7 @@ export class Room {
     const base = {
       code: this.code,
       me: id,
+      canEditName: this.canEditName,
       hostId: this.hostId,
       phase: this.phase,
       settings: this.settings,
