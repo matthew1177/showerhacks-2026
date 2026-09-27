@@ -51,25 +51,55 @@ test('local playground checks readiness and returns an actual PNG without exposi
   assert.ok(requests.every((req) => req.authorization === 'Bearer local-test-secret-only'))
 })
 
-test('playground rejects tunnels, Discord proxies, and cross-site requests before reaching the model', async (t) => {
+function playgroundRequest(origin, headers, { method = 'POST', path = '/api/image-test' } = {}) {
+  // Use raw HTTP to model the Host and forwarding headers received from a tunnel.
+  return new Promise((resolve, reject) => {
+    const req = request(`${origin}${path}`, { method, headers: { 'Content-Type': 'application/json', ...headers } }, (res) => {
+      const chunks = []
+      res.on('data', (chunk) => chunks.push(chunk))
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }))
+      res.on('error', reject)
+    })
+    req.on('error', reject)
+    req.end(method === 'POST' ? JSON.stringify({ prompt: 'duck', model: 'sdxl-turbo' }) : undefined)
+  })
+}
+
+test('public tunnel playground checks readiness and generates PNGs through the game server', async (t) => {
+  const { origin, requests } = await fixture(t)
+  const headers = {
+    Host: 'playground.example.com',
+    'X-Forwarded-For': '203.0.113.1',
+    'X-Forwarded-Proto': 'https',
+    'CF-Connecting-IP': '203.0.113.1',
+    'CF-Ray': 'test-ray',
+    'Sec-Fetch-Site': 'same-origin',
+  }
+  const status = await playgroundRequest(origin, headers, { method: 'GET' })
+  assert.equal(status.status, 200)
+  assert.equal(JSON.parse(status.body).ready, true)
+  const response = await playgroundRequest(origin, { ...headers, Origin: 'https://playground.example.com' })
+  assert.equal(response.status, 200)
+  assert.equal(response.headers['content-type'], 'image/png')
+  assert.deepEqual(response.body, png)
+  assert.deepEqual(requests[1].body, { prompt: 'duck', style: 'Any', creativity: 50, model: 'sdxl-turbo' })
+  assert.ok(requests.every((req) => req.authorization === 'Bearer local-test-secret-only'))
+  const proxy = await playgroundRequest(origin, headers, { method: 'GET', path: '/.proxy/api/image-test' })
+  assert.equal(proxy.status, 200)
+})
+
+test('playground rejects cross-site requests before reaching the model', async (t) => {
   const { origin, requests } = await fixture(t)
   for (const headers of [
-    { Host: 'public.example.com' }, { Origin: 'https://external.example.com' },
-    { 'X-Forwarded-For': '203.0.113.1' }, { 'CF-Connecting-IP': '203.0.113.1' },
+    { Origin: 'https://external.example.com' }, { Origin: 'null' },
+    { Host: 'playground.example.com', Origin: 'https://external.example.com', 'X-Forwarded-Host': 'external.example.com' },
+    { Host: 'playground.example.com', Origin: 'https://playground.example.com.evil.example' },
+    { Host: 'playground.example.com', Origin: 'https://playground.example.com', 'Sec-Fetch-Site': 'cross-site' },
     { 'Sec-Fetch-Site': 'cross-site' },
   ]) {
-    // Use raw HTTP: fetch normalizes protected headers such as Host.
-    const status = await new Promise((resolve, reject) => {
-      const req = request(`${origin}/api/image-test`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers } }, (res) => {
-        res.resume()
-        resolve(res.statusCode)
-      })
-      req.on('error', reject)
-      req.end(JSON.stringify({ prompt: 'duck' }))
-    })
-    assert.equal(status, 403, JSON.stringify(headers))
+    const response = await playgroundRequest(origin, headers)
+    assert.equal(response.status, 403, JSON.stringify(headers))
   }
-  assert.equal((await fetch(`${origin}/.proxy/api/image-test`)).status, 403)
   assert.equal(requests.length, 0)
 })
 

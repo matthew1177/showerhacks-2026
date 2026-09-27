@@ -76,7 +76,7 @@ requests and serves generated PNGs through `/images/`, including Discord's
 Before starting a game, the host chooses **Chroma Flash** (the default) or
 **SDXL-Turbo** under **Settings → Image model**. Everyone sees the choice, and it
 stays fixed through every round and final scoring. The server starts loading the
-chosen model while players write their first prompts. The local image playground
+chosen model while players write their first prompts. The image playground
 offers the same choices.
 
 Chroma Flash defaults to 384×384 with six sampling steps. This trades
@@ -133,9 +133,11 @@ Open [the image playground](http://localhost:5173/image-test) while the game and
 image servers are running. Enter a prompt, choose a model, art style and creativity,
 then generate, preview, or save a PNG without starting a multiplayer game.
 The page checks model readiness automatically and shows elapsed generation time.
-Its API is available only through a direct localhost connection; it is not
-available through the public tunnel or Discord proxy. The shared secret stays
-on the server. If you changed `PORT`, use that port in the URL.
+The playground also works at `/image-test` on the game's public tunnel URL, so
+anyone with that link can generate images while the host's servers are running.
+The shared secret stays on the server. Browser requests from unrelated sites
+are rejected, and only one playground image can generate at a time.
+If you changed `PORT`, use that port in the local URL.
 
 ## Connect the Discord Activity
 

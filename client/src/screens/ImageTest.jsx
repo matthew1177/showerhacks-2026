@@ -131,7 +131,7 @@ export default function ImageTest() {
             <button className="btn btn--primary btn--lg" disabled={busy || !service.ready || !prompt.trim()}>
               {busy ? `Generating… ${duration(elapsed)}` : result ? 'Generate again' : 'Generate image'}
             </button>
-            <p className="muted small image-test__footnote">Runs locally on your Mac. Speed depends on image settings and queued requests.</p>
+            <p className="muted small image-test__footnote">Generation speed depends on the selected model and queued requests.</p>
           </form>
 
           <section className="card image-test__output" aria-label="Image preview" aria-busy={busy}>

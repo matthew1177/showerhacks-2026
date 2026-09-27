@@ -1,5 +1,5 @@
 // Client for the Python image API (../imagegen). Only this server talks to it, using a shared
-// secret. Game turns and the local test page can generate images. PNGs are kept in memory and
+// secret. Game turns and the image test page can generate images. PNGs are kept in memory and
 // served same-origin at /images/<id>.png (Discord's CSP blocks outside image URLs).
 
 import { randomUUID } from 'node:crypto'

@@ -40,13 +40,14 @@ function requestPath(url) {
   return new URL(url, 'http://localhost').pathname.replace(/^\/\.proxy(?=\/)/, '')
 }
 
-function isDirectLocalRequest(req) {
-  const local = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
-  if (!local.has(req.socket.remoteAddress) || req.url.startsWith('/.proxy/')) return false
-  if (Object.keys(req.headers).some((key) => key.startsWith('x-forwarded-') || ['forwarded', 'cf-connecting-ip', 'cf-ray'].includes(key))) return false
+function isPlaygroundRequestAllowed(req) {
+  // Public tunnels can reach the playground, but other websites cannot submit
+  // browser requests to it. The image API secret stays on the game server.
+  if (req.headers['sec-fetch-site'] === 'cross-site') return false
   const host = req.headers.host
-  if (!host || !['localhost', '127.0.0.1', '[::1]'].includes(new URL(`http://${host}`).hostname)) return false
-  return (!req.headers.origin || req.headers.origin === `http://${host}`) && req.headers['sec-fetch-site'] !== 'cross-site'
+  if (!host) return false
+  const origin = req.headers.origin
+  return !origin || origin === `http://${host}` || origin === `https://${host}`
 }
 
 export function createGameServer({ discord = createDiscordAuth(), frontend, fetchAvatar = fetch } = {}) {
@@ -65,7 +66,7 @@ export function createGameServer({ discord = createDiscordAuth(), frontend, fetc
       }
       if (pathname === '/api' && req.method === 'GET') return json(res, 200, { status: 'ok' })
       if (pathname === '/api/image-test') {
-        if (!isDirectLocalRequest(req)) return json(res, 403, { error: 'Open the image test page on localhost to use it.' })
+        if (!isPlaygroundRequestAllowed(req)) return json(res, 403, { error: 'Open the image test page on this game server to use it.' })
         if (req.method === 'GET') return json(res, 200, await imageServiceStatus())
         if (req.method !== 'POST') {
           res.setHeader('Allow', 'GET, POST')
