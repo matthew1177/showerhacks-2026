@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import threading
 import unittest
@@ -21,7 +22,7 @@ class ModelThreadTest(unittest.IsolatedAsyncioTestCase):
             def generate(prompt, style, creativity, model):
                 self.assertEqual(threading.get_ident(), model_thread)
                 calls.append((prompt, style, creativity, model))
-                return prompt.encode()
+                return prompt.encode(), [f"{prompt} wears a tiny party hat"]
 
             def prepare(model):
                 self.assertEqual(threading.get_ident(), model_thread)
@@ -39,6 +40,8 @@ class ModelThreadTest(unittest.IsolatedAsyncioTestCase):
                 ))
 
         self.assertEqual([response.body for response in responses], [b"duck", b"panda"])
+        self.assertEqual([json.loads(response.headers["X-Image-Modifiers"]) for response in responses],
+                         [["duck wears a tiny party hat"], ["panda wears a tiny party hat"]])
         self.assertEqual(calls, [("prepare", "sdxl-turbo"), ("duck", "Cartoon", 80, "sdxl-turbo"), ("panda", "Cartoon", 80, "chroma-flash")])
 
     def test_unknown_models_are_rejected_before_reaching_the_worker(self):

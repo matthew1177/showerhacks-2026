@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { Avatar, Wordmark } from '../components/ui'
 import { ART_STYLES } from '../mock'
 import IMAGE_MODELS from '../../../shared/image-models.json'
-
-const creativityLabel = (n) => (n < 35 ? 'Literal' : n < 63 ? 'Balanced' : n < 88 ? 'Creative' : 'Wild')
+import { creativityLabel } from '../creativity'
 
 export default function Lobby({ players, me, isHost, hostId, settings, onSettings, onName, onStart }) {
   const [name, setName] = useState(null)

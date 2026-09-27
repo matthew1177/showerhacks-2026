@@ -9,6 +9,7 @@ Run:  .venv/bin/python app.py
 """
 
 import asyncio
+import json
 import os
 import secrets
 from concurrent.futures import ThreadPoolExecutor
@@ -36,10 +37,10 @@ from model_config import DEFAULT_MODEL, MODELS, model_config
 
 
 def load_generator():
-    from model import generate, prepare_model
+    from model import generate_with_metadata, prepare_model
 
     prepare_model()
-    return generate, prepare_model
+    return generate_with_metadata, prepare_model
 
 
 def load_scorer():
@@ -93,10 +94,10 @@ def require_game_server(authorization: str = Header(default="")):
 async def generate_image(req: GenerateRequest):
     if req.style not in ART_STYLES:
         raise HTTPException(status_code=422, detail="unknown style")
-    png = await asyncio.get_running_loop().run_in_executor(
+    png, modifiers = await asyncio.get_running_loop().run_in_executor(
         app.state.worker, app.state.generate, req.prompt, req.style, req.creativity, req.model
     )
-    return Response(png, media_type="image/png")
+    return Response(png, media_type="image/png", headers={"X-Image-Modifiers": json.dumps(modifiers)})
 
 
 @app.post("/prepare", dependencies=[Depends(require_game_server)])

@@ -8,7 +8,9 @@ function mockImageApi(t) {
   Object.assign(process.env, { IMAGE_API_URL: 'http://image-api.test', IMAGE_API_SECRET: 'image-api-test-secret' })
   t.mock.method(globalThis, 'fetch', async (url, { body }) => {
     if (url.endsWith('/prepare')) return Response.json({ ready: true })
-    if (url.endsWith('/generate')) return new Response(JSON.parse(body).prompt)
+    if (url.endsWith('/generate')) return new Response(JSON.parse(body).prompt, {
+      headers: { 'X-Image-Modifiers': JSON.stringify(['everything is made of wobbly jelly']) },
+    })
     const text = String(body)
     return Response.json({ embedding: text.includes('cat') ? [1, 0, 0] : text.includes('car') ? [0, 1, 0] : [0, 0, 1] })
   })
@@ -36,6 +38,14 @@ test('guesses score by their image’s similarity to the chain’s first image',
   for (let turn = 0; turn < 3; turn++) {
     for (const id of [a, b]) room.handle(id, { type: 'submit', text: say[id][turn] })
     await settle()
+    if (turn < 2) {
+      for (const id of [a, b]) {
+        const view = room.view(id)
+        assert.equal(view.play.task.kind, 'guess')
+        assert.equal(Object.hasOwn(view.play.task.image, 'modifiers'), false)
+        assert.ok(!JSON.stringify(view).includes('wobbly jelly'), 'modifiers must stay out of all guessing payloads')
+      }
+    }
   }
 
   // Final guesses are drawn and scored before the reveal starts.
@@ -47,6 +57,10 @@ test('guesses score by their image’s similarity to the chain’s first image',
 
   const reveal = () => room.view(a).reveal
   assert.equal(reveal().leaderboard, null, 'scores stay hidden until every chain is revealed')
+  assert.ok(!JSON.stringify(reveal()).includes('wobbly jelly'), 'do not leak modifiers before their image is revealed')
+  room.handle(a, { type: 'next' })
+  assert.deepEqual(reveal().steps[1].modifiers, ['everything is made of wobbly jelly'])
+  assert.equal(reveal().steps[0].text, 'a cat', 'keep the original prompt intact')
   while (!reveal().leaderboard) room.handle(a, { type: 'next' })
   assert.deepEqual(reveal().leaderboard, [
     { playerId: b, points: 200, guesses: 2 },

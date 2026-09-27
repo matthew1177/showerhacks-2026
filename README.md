@@ -127,6 +127,28 @@ The game server queues image requests one at a time, with a five-minute timeout
 per image rather than per round; `IMAGE_TIMEOUT_MS` in `server/.env` overrides it.
 Existing art-style and creativity settings still apply.
 
+### Silly prompt modifiers
+
+The **Creativity** slider now adds concrete visual jokes to generated images:
+**Literal** (0–34) asks for a simple depiction, **Balanced** (35–62) uses the prompt
+and art style as written, **Silly** (63–87) adds one random modifier, and
+**Unhinged** (88–100) adds two. Try **75** for a single gag or **90** for a combination.
+The default remains Balanced at 50.
+
+Modifiers include enormous roller skates, wobbly jelly, a giant teacup, and an
+audience of rubber ducks. Each image gets a fresh draw from 60 modifiers across
+accessories, materials, settings, proportions, and onlookers. Two-modifier combinations
+use different categories to avoid conflicting materials, locations, or proportions.
+The model is asked to keep the main subject and action recognizable.
+Modifiers are instructions to the model, so the resulting image may interpret them loosely.
+
+The player's original prompt stays intact. Modifiers stay hidden during guessing
+and appear as **The AI was told…** alongside their image in the reveal. The image
+playground shows them immediately after generation. Scoring still compares each
+guess's image to the chain's first image, so added visual gags can affect scores.
+Restart the Python image service after updating to load the new modifier catalog;
+an older service still returns images but won't provide modifier notes.
+
 ### Test a single image
 
 Open [the image playground](http://localhost:5173/image-test) while the game and

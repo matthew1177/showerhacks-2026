@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Avatar, GeneratedImage } from '../components/ui'
+import { Avatar, GeneratedImage, ModifierNote } from '../components/ui'
 
 export default function Reveal({ reveal, playersById, isHost, onNext, onLobby }) {
   if (reveal.leaderboard) {
@@ -38,6 +38,7 @@ function Chain({ reveal, playersById, isHost, onNext, onLobby }) {
                 <div className="msg__body">
                   <div className="msg__name">Image model <span className="pill pill--bot">BOT</span></div>
                   <GeneratedImage image={step} />
+                  <ModifierNote modifiers={step.modifiers} />
                 </div>
               </div>
             )

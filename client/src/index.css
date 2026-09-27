@@ -300,6 +300,14 @@ h1, h2, h3 { font-family: var(--u-font-display); font-weight: 800; letter-spacin
   font-size: 17px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere;
 }
 .bubble--prompt { background: var(--u-sticky); }
+.modifier-note {
+  max-width: 520px; margin-top: 6px; padding: 12px 14px; border: 2px dashed var(--u-ink);
+  border-radius: 14px; background: var(--u-tomato-soft); font-size: 14px; line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.modifier-note strong { font-family: var(--u-font-display); }
+.modifier-note ul { margin: 6px 0 0; padding-left: 20px; }
+.modifier-note li + li { margin-top: 4px; }
 @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
 
 .summary {

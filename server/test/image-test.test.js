@@ -46,9 +46,21 @@ test('local playground checks readiness and returns an actual PNG without exposi
   assert.equal(response.headers.get('content-type'), 'image/png')
   assert.equal(response.headers.get('cache-control'), 'no-store')
   assert.ok(Number(response.headers.get('x-generation-time-ms')) >= 0)
+  assert.deepEqual(JSON.parse(response.headers.get('x-image-modifiers')), [])
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), png)
   assert.deepEqual(requests[1].body, { prompt: 'duck on the moon', style: 'Claymation', creativity: 80 })
   assert.ok(requests.every((req) => req.authorization === 'Bearer local-test-secret-only'))
+})
+
+test('playground returns the exact modifiers alongside the PNG', async (t) => {
+  const modifiers = ['everything is made of wobbly jelly', 'the scene is inside a snow globe']
+  const { post } = await fixture(t, (req, res) => res.writeHead(200, {
+    'Content-Type': 'image/png', 'X-Image-Modifiers': JSON.stringify(modifiers),
+  }).end(png))
+  const response = await post({ prompt: 'duck', creativity: 90 })
+  assert.equal(response.status, 200)
+  assert.deepEqual(JSON.parse(response.headers.get('x-image-modifiers')), modifiers)
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), png)
 })
 
 function playgroundRequest(origin, headers, { method = 'POST', path = '/api/image-test' } = {}) {

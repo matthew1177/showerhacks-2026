@@ -14,6 +14,7 @@ os.environ.setdefault("PYTORCH_MPS_PREFER_METAL", "1")
 import torch
 from diffusers import ChromaPipeline, StableDiffusionXLPipeline
 from model_config import model_config
+from prompt_modifiers import compose_prompt, select_modifiers
 
 logger = logging.getLogger("uvicorn.error")
 STYLE_SUFFIX = {
@@ -24,21 +25,6 @@ STYLE_SUFFIX = {
     "Oil painting": ", oil painting, visible brush strokes, canvas texture",
     "Claymation": ", claymation, stop-motion clay figures, plasticine",
 }
-
-# Diffusion has no sampling temperature, so "creativity" (0-100) steers how literally the prompt
-# is drawn: low values ask for a plain, readable depiction; high values mix in random twists.
-LITERAL_SUFFIX = ", literal depiction, single clear subject, simple composition, plain background"
-TWISTS = [
-    "surreal", "dreamlike", "unexpected setting", "strange scale", "vivid unusual colors",
-    "whimsical details", "dramatic lighting", "fantasy elements", "abstract shapes", "odd perspective",
-]
-
-
-def creative_suffix(creativity: int) -> str:
-    if creativity < 35:
-        return LITERAL_SUFFIX
-    twists = round((creativity - 50) / 25)  # 0 up to 62, 1 up to 87, then 2
-    return "".join(f", {t}" for t in random.sample(TWISTS, max(twists, 0)))
 
 _pipeline = None
 _active_model = None
@@ -127,15 +113,21 @@ def _render(pipeline, text, config, seed):
 
 
 @torch.inference_mode()
-def generate(prompt: str, style: str, creativity: int = 50, model=None) -> bytes:
-    """Return PNG bytes for `prompt` in the lobby's art style and creativity."""
+def generate_with_metadata(prompt: str, style: str, creativity: int = 50, model=None) -> tuple[bytes, list[str]]:
+    """Return the PNG and the exact modifiers used, without drawing a second time."""
     config = model_config(model)
     pipeline = load_model(config["id"])
     started = time.monotonic()
-    text = prompt + creative_suffix(creativity) + STYLE_SUFFIX.get(style, "")
+    modifiers = select_modifiers(creativity)
+    text = compose_prompt(prompt, creativity, modifiers) + STYLE_SUFFIX.get(style, "")
     image = _render(pipeline, text, config, random.getrandbits(63))
 
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     logger.info("%s generated an image in %.1fs", config["label"], time.monotonic() - started)
-    return buf.getvalue()
+    return buf.getvalue(), modifiers
+
+
+def generate(prompt: str, style: str, creativity: int = 50, model=None) -> bytes:
+    """Keep the PNG-only interface for local scripts."""
+    return generate_with_metadata(prompt, style, creativity, model)[0]

@@ -1,8 +1,8 @@
 .image-test { padding: 28px 36px 48px; gap: 32px; }
 .image-test__header, .image-test__intro, .image-test__grid { width: 100%; max-width: 1160px; flex-shrink: 0; }
 .image-test__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.image-test__brand { color: var(--text); font-size: 21px; font-weight: 800; letter-spacing: -.6px; text-decoration: none; }
-.image-test__brand span { color: var(--accent); }
+.image-test__brand { color: var(--u-ink); text-decoration: none; flex-shrink: 0; }
+.image-test__brand .wordmark { --wordmark-size: clamp(30px, 5vw, 42px); }
 .image-test__back { color: var(--muted); text-decoration: none; font-size: 13px; }
 .image-test__back:hover { color: var(--text); }
 .image-test__intro { display: flex; align-items: end; justify-content: space-between; gap: 24px; }

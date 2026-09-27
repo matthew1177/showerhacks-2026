@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { setImmediate } from 'node:timers/promises'
 import test from 'node:test'
-import { deleteImage, generateImage, getImage } from '../images.js'
+import { deleteImage, generateImage, getImage, getImageModifiers } from '../images.js'
 
 function configure(t) {
   const saved = { ...process.env }
@@ -64,4 +64,32 @@ test('a failed image does not block the next player', async (t) => {
   const id = await next
   assert.equal(getImage(id).toString(), 'PNG')
   deleteImage(id)
+})
+
+test('modifier metadata follows its image and is removed with it', async (t) => {
+  configure(t)
+  const modifiers = ['everything is made of wobbly jelly', 'the scene is inside a snow globe']
+  t.mock.method(globalThis, 'fetch', async () => new Response(Buffer.from('PNG'), {
+    headers: { 'X-Image-Modifiers': JSON.stringify(modifiers) },
+  }))
+  const id = await generateImage('duck', 'Any', 90)
+  assert.equal(getImage(id).toString(), 'PNG')
+  assert.deepEqual(getImageModifiers(id), modifiers)
+  deleteImage(id)
+  assert.equal(getImage(id), undefined)
+  assert.deepEqual(getImageModifiers(id), [])
+})
+
+test('older services and invalid optional metadata still return usable images', async (t) => {
+  configure(t)
+  let header
+  t.mock.method(globalThis, 'fetch', async () => new Response(Buffer.from('PNG'), {
+    headers: header === undefined ? {} : { 'X-Image-Modifiers': header },
+  }))
+  for (header of [undefined, 'not JSON', '{}', '[null]', '["one","two","three"]', JSON.stringify(['x'.repeat(161)])]) {
+    const id = await generateImage('duck', 'Any', 90)
+    assert.equal(getImage(id).toString(), 'PNG')
+    assert.deepEqual(getImageModifiers(id), [])
+    deleteImage(id)
+  }
 })

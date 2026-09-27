@@ -2,7 +2,7 @@
 // clients only receive a per-player view (see `view`) so nobody can peek at other chains.
 
 import { randomUUID } from 'node:crypto'
-import { deleteImage, embedImage, generateImage, imagesEnabled, prepareImageModel, similarityPoints } from './images.js'
+import { deleteImage, embedImage, generateImage, getImageModifiers, imagesEnabled, prepareImageModel, similarityPoints } from './images.js'
 import IMAGE_MODELS from '../shared/image-models.json' with { type: 'json' }
 
 const COLORS = ['mauve', 'pink', 'green', 'yellow', 'red', 'blue', 'peach', 'teal', 'lavender', 'rosewater']
@@ -250,6 +250,7 @@ export class Room {
       if (this.disposed) return deleteImage(id)
       this.imageIds.push(id)
       image.url = `/images/${id}.png`
+      image.modifiers = getImageModifiers(id)
       image.pending = false
       const embedding = await embedImage(id)
       if (step.kind === 'prompt') chain.reference = embedding
@@ -318,6 +319,7 @@ export class Room {
 
     if (this.phase === 'play') {
       const chain = this.chainFor(id)
+      const image = chain?.steps.at(-1)
       base.play = {
         turn: g.turn + 1,
         turns: g.turns,
@@ -325,7 +327,11 @@ export class Room {
         seconds: g.turn === 0 ? this.settings.promptSeconds : this.settings.guessSeconds,
         finishing: g.finishing,
         // null = joined mid-game, just watching
-        task: !chain || g.finishing ? null : g.turn === 0 ? { kind: 'prompt' } : { kind: 'guess', image: chain.steps.at(-1) },
+        // Only reveal modifiers with their image at the end of the game. Even
+        // reconnecting players must receive no hints in their guessing payload.
+        task: !chain || g.finishing ? null : g.turn === 0 ? { kind: 'prompt' } : {
+          kind: 'guess', image: { kind: image.kind, seed: image.seed, url: image.url, pending: image.pending },
+        },
         submitted: g.submissions.get(id) ?? null,
       }
     }

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { ART_STYLES } from '../mock'
 import IMAGE_MODELS from '../../../shared/image-models.json'
+import { ModifierNote, Wordmark } from '../components/ui'
+import { creativityLabel } from '../creativity'
 
 const EXAMPLES = [
   'A tiny astronaut watering a garden on the moon',
   'A duck wearing a crown, riding a bicycle through Paris',
   'A cozy bookstore inside a giant forest mushroom',
 ]
-const creativityLabel = (n) => n < 35 ? 'Literal' : n < 63 ? 'Balanced' : n < 88 ? 'Creative' : 'Wild'
 const duration = (seconds) => seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 
 export default function ImageTest() {
@@ -67,6 +68,7 @@ export default function ImageTest() {
       setResult({
         url: URL.createObjectURL(blob), prompt: prompt.trim(), style, creativity, model,
         seconds: Math.round(Number(response.headers.get('X-Generation-Time-Ms')) / 1000),
+        modifiers: JSON.parse(response.headers.get('X-Image-Modifiers') ?? '[]'),
       })
     } catch (err) {
       setError(err.message || 'Could not generate the image. Please try again.')
@@ -79,7 +81,7 @@ export default function ImageTest() {
     <div className="app">
       <main className="screen lobby image-test">
         <header className="image-test__header">
-          <a className="image-test__brand" href="/">Prompt<span>Phone</span></a>
+          <a className="image-test__brand" href="/" aria-label="Unprompted home"><Wordmark /></a>
           <a className="image-test__back" href="/">← Back to game</a>
         </header>
         <div className="image-test__intro">
@@ -158,6 +160,7 @@ export default function ImageTest() {
               <div><p>{result.prompt}</p><span className="muted small">{result.style} · Creativity {result.creativity} · {duration(result.seconds)}</span></div>
               <a className="btn btn--secondary" href={result.url} download={`${result.model}-image.png`}>Save PNG ↓</a>
             </div>}
+            {result && <ModifierNote modifiers={result.modifiers} />}
           </section>
         </div>
       </main>

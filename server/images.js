@@ -23,7 +23,7 @@ export async function imageServiceStatus() {
   }
 }
 
-const images = new Map() // id -> PNG Buffer
+const images = new Map() // id -> { png, modifiers }; modifiers are private until the reveal
 let generationQueue = Promise.resolve()
 
 function enqueue(operation) {
@@ -59,7 +59,16 @@ async function requestImage(prompt, style, creativity, model) {
   })
   if (!res.ok) throw new Error(`image API responded ${res.status}`)
   const id = randomUUID()
-  images.set(id, Buffer.from(await res.arrayBuffer()))
+  // Older image services have no metadata. A malformed optional header should
+  // never throw away an otherwise successful image.
+  let modifiers = []
+  try {
+    const value = JSON.parse(res.headers.get('X-Image-Modifiers') ?? '[]')
+    if (Array.isArray(value) && value.length <= 2 && value.every((item) => typeof item === 'string' && item.length <= 160)) {
+      modifiers = value
+    }
+  } catch { /* keep the image without modifier metadata */ }
+  images.set(id, { png: Buffer.from(await res.arrayBuffer()), modifiers })
   return id
 }
 
@@ -69,7 +78,7 @@ export async function embedImage(id) {
   const res = await fetch(`${process.env.IMAGE_API_URL}/embed`, {
     method: 'POST',
     headers: { 'content-type': 'image/png', authorization: `Bearer ${process.env.IMAGE_API_SECRET}` },
-    body: images.get(id),
+    body: getImage(id),
     signal: AbortSignal.timeout(Number(process.env.IMAGE_TIMEOUT_MS) || 60_000),
   })
   if (!res.ok) throw new Error(`embed API responded ${res.status}`)
@@ -79,5 +88,6 @@ export async function embedImage(id) {
 // Cosine similarity of unit vectors as 0-100 points (unrelated images land near 0).
 export const similarityPoints = (a, b) => Math.round(Math.max(0, a.reduce((sum, x, i) => sum + x * b[i], 0)) * 100)
 
-export const getImage = (id) => images.get(id)
+export const getImage = (id) => images.get(id)?.png
+export const getImageModifiers = (id) => images.get(id)?.modifiers ?? []
 export const deleteImage = (id) => images.delete(id)

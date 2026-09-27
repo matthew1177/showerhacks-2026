@@ -1,6 +1,7 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+from PIL import Image
 
 import model
 from model_config import model_config
@@ -76,6 +77,28 @@ class ModelSelectionTest(unittest.TestCase):
             else:
                 self.assertEqual(options["max_sequence_length"], 128)
                 self.assertIsNone(options["negative_prompt"])
+
+    def test_generation_reports_the_same_modifiers_it_sent_to_either_model(self):
+        modifiers = ["everything is made of wobbly jelly", "the scene is inside a snow globe"]
+        for name in ("chroma-flash", "sdxl-turbo"):
+            with (
+                patch.object(model, "load_model"),
+                patch.object(model, "select_modifiers", return_value=modifiers) as select,
+                patch.object(model, "_render", return_value=Image.new("RGB", (1, 1))) as render,
+            ):
+                png, reported = model.generate_with_metadata("a duck driving a bus", "Claymation", 90, name)
+                self.assertTrue(png.startswith(b"\x89PNG"))
+                self.assertEqual(reported, modifiers)
+                select.assert_called_once_with(90)
+                text = render.call_args.args[1]
+                self.assertTrue(text.startswith("a duck driving a bus"))
+                for modifier in reported:
+                    self.assertIn(modifier, text)
+                self.assertTrue(text.endswith(model.STYLE_SUFFIX["Claymation"]))
+
+    def test_local_scripts_can_still_request_png_bytes(self):
+        with patch.object(model, "generate_with_metadata", return_value=(b"PNG", ["a visual gag"])):
+            self.assertEqual(model.generate("a duck", "Any"), b"PNG")
 
 
 if __name__ == "__main__":

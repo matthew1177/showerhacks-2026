@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { WebSocket, WebSocketServer } from 'ws'
 import { Room } from './game.js'
 import { createDiscordAuth, DiscordError } from './discord.js'
-import { deleteImage, generateImage, getImage, imagesEnabled, imageServiceStatus } from './images.js'
+import { deleteImage, generateImage, getImage, getImageModifiers, imagesEnabled, imageServiceStatus } from './images.js'
 import IMAGE_MODELS from '../shared/image-models.json' with { type: 'json' }
 
 const DIST = fileURLToPath(new URL('../client/dist/', import.meta.url))
@@ -92,10 +92,12 @@ export function createGameServer({ discord = createDiscordAuth(), frontend, fetc
         try {
           const id = await generateImage(prompt, style, creativity, model)
           const png = getImage(id)
+          const modifiers = getImageModifiers(id)
           deleteImage(id)
           res.writeHead(200, {
             'Content-Type': 'image/png', 'Cache-Control': 'no-store',
             'X-Generation-Time-Ms': String(Date.now() - started),
+            'X-Image-Modifiers': JSON.stringify(modifiers),
           })
           return res.end(png)
         } catch {
