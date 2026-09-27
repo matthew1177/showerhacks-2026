@@ -79,7 +79,7 @@ class ModelSelectionTest(unittest.TestCase):
                 self.assertIsNone(options["negative_prompt"])
 
     def test_generation_reports_the_same_modifiers_it_sent_to_either_model(self):
-        modifiers = ["everything is made of wobbly jelly", "the scene is inside a snow globe"]
+        modifiers = ["handmade stop-motion clay with faint fingerprints", "warm late-afternoon light"]
         for name in ("chroma-flash", "sdxl-turbo"):
             with (
                 patch.object(model, "load_model"),
@@ -89,12 +89,22 @@ class ModelSelectionTest(unittest.TestCase):
                 png, reported = model.generate_with_metadata("a duck driving a bus", "Claymation", 90, name)
                 self.assertTrue(png.startswith(b"\x89PNG"))
                 self.assertEqual(reported, modifiers)
-                select.assert_called_once_with(90)
+                select.assert_called_once_with(90, "Claymation")
                 text = render.call_args.args[1]
                 self.assertTrue(text.startswith("a duck driving a bus"))
                 for modifier in reported:
                     self.assertIn(modifier, text)
-                self.assertTrue(text.endswith(model.STYLE_SUFFIX["Claymation"]))
+                self.assertNotIn(model.STYLE_SUFFIX["Claymation"], text)
+
+    def test_generations_without_modifiers_keep_the_selected_base_style(self):
+        with (
+            patch.object(model, "load_model"),
+            patch.object(model, "_render", return_value=Image.new("RGB", (1, 1))) as render,
+        ):
+            for creativity in (20, 50):
+                _, modifiers = model.generate_with_metadata("a duck driving a bus", "Cartoon", creativity)
+                self.assertEqual(modifiers, [])
+                self.assertTrue(render.call_args.args[1].endswith(model.STYLE_SUFFIX["Cartoon"]))
 
     def test_local_scripts_can_still_request_png_bytes(self):
         with patch.object(model, "generate_with_metadata", return_value=(b"PNG", ["a visual gag"])):

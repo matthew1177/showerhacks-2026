@@ -118,8 +118,12 @@ def generate_with_metadata(prompt: str, style: str, creativity: int = 50, model=
     config = model_config(model)
     pipeline = load_model(config["id"])
     started = time.monotonic()
-    modifiers = select_modifiers(creativity)
-    text = compose_prompt(prompt, creativity, modifiers) + STYLE_SUFFIX.get(style, "")
+    modifiers = select_modifiers(creativity, style)
+    # A selected variation already specifies the requested style family. Avoid
+    # appending its generic preset too, which could contradict that variation.
+    text = compose_prompt(prompt, creativity, modifiers)
+    if not modifiers:
+        text += STYLE_SUFFIX.get(style, "")
     image = _render(pipeline, text, config, random.getrandbits(63))
 
     buf = io.BytesIO()

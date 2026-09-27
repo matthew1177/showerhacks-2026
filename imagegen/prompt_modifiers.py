@@ -1,89 +1,133 @@
-"""Small visual jokes selected once per image and saved for the game's reveal."""
+"""Gentle art directions selected once per image and saved for the reveal."""
 
 import random
 
 LITERAL_SUFFIX = ", literal depiction, single clear subject, simple composition, plain background"
 
-# Draw from different categories when combining jokes so we never ask for two
-# competing materials or two different locations in the same image.
-MODIFIERS = {
-    "accessory": (
-        "the main subject wears enormous roller skates",
-        "the main subject wears a tiny party hat",
-        "the main subject wears oversized heart-shaped sunglasses",
-        "the main subject wears an inflatable swim ring",
-        "the main subject sports a magnificent curly moustache",
-        "the main subject wears a crown made of spaghetti",
-        "the main subject wears a traffic cone as a hat",
-        "the main subject wears a cape made of a picnic blanket",
-        "the main subject wears gigantic fuzzy bunny slippers",
-        "the main subject wears a necktie that drags along the ground",
-        "the main subject wears a necklace of rubber ducks",
-        "the main subject wears a helmet with a tiny spinning propeller",
+# Any can explore different media. An explicit art style stays within its own
+# family instead of being overwritten by an incompatible random medium.
+STYLE_VARIATIONS = {
+    "Any": (
+        "soft watercolor washes with restrained ink outlines",
+        "warm colored-pencil illustration on lightly textured paper",
+        "delicate pen-and-ink illustration with a gentle color wash",
+        "matte gouache illustration with softly simplified shapes",
+        "soft pastel illustration with blended edges",
+        "hand-printed linocut illustration with fine carved lines",
+        "subtle risograph illustration with lightly offset printed colors",
+        "layered paper-cut illustration with shallow paper shadows",
+        "gently stylized 3D illustration with matte surfaces",
+        "soft analog photography with subtle film grain",
+        "loose graphite illustration with a few restrained color accents",
+        "vintage picture-book illustration with delicate painted details",
     ),
-    "material": (
-        "everything is made of wobbly jelly",
-        "everything looks like inflatable pool toys",
-        "everything is knitted from chunky wool",
-        "everything is made of folded cardboard",
-        "everything is made of marshmallows",
-        "everything looks like squeaky rubber bath toys",
-        "everything is sculpted from mashed potatoes",
-        "everything is made of shiny crumpled aluminium foil",
-        "everything is built from gingerbread and icing",
-        "everything is made of colorful pipe cleaners",
-        "everything is made of stacked cheese cubes",
-        "everything is made of bouncy soap bubbles",
+    "Photo": (
+        "candid 35mm photography with subtle film grain",
+        "medium-format editorial photography with natural detail",
+        "soft analog photography with a gently faded finish",
+        "polished magazine photography with understated color grading",
+        "vintage instant photography with softly rendered detail",
+        "documentary photography with natural, unpolished textures",
     ),
-    "setting": (
-        "the scene takes place inside a giant teacup",
-        "the scene is on a tiny theater stage with velvet curtains",
-        "the scene is inside a snow globe",
-        "the scene is on a floating slice of pizza",
-        "the scene is in a ball pit",
-        "the scene is inside an enormous cereal bowl",
-        "the scene is on top of a giant birthday cake",
-        "the scene is inside a claw machine",
-        "the scene is in a supermarket run by penguins",
-        "the scene is on a tiny island made of waffles",
-        "the scene is in a disco with a giant broccoli mirror ball",
-        "the scene is inside a dollhouse with floral wallpaper",
+    "Cartoon": (
+        "hand-drawn storybook cartoon with delicate linework",
+        "clean editorial cartoon with gently rounded shapes",
+        "vintage newspaper cartoon with expressive ink lines",
+        "soft animated-film illustration with subtle shading",
+        "simple comic-book illustration with flat color blocks",
+        "hand-inked cartoon with slightly irregular outlines",
     ),
-    "proportions": (
-        "the main subject is smaller than a teaspoon",
-        "the main subject towers over miniature buildings",
-        "the main subject is as flat as a pancake",
-        "the main subject is stretched tall like a pool noodle",
-        "the main subject is perfectly round like a beach ball",
-        "the main subject has a comically oversized head",
-        "the main subject has tiny legs and enormous feet",
-        "the main subject balances on absurdly long stilt legs",
-        "the main subject has huge googly eyes",
-        "the main subject has an enormous curly tail",
-        "every piece of furniture is comically tiny",
-        "ordinary objects in the background are the size of skyscrapers",
+    "Pixel art": (
+        "hand-placed chunky pixels with crisp silhouettes",
+        "retro adventure-game pixel art with delicate dithering",
+        "16-bit pixel art with soft stepped shading",
+        "clean low-resolution pixel art with restrained detail",
+        "small-palette pixel art with carefully placed highlights",
+        "classic arcade pixel art with tidy block shapes",
     ),
-    "onlookers": (
-        "a very serious audience of rubber ducks watches the scene",
-        "three pigeons in business suits inspect the scene",
-        "a tiny marching band of frogs parades in the background",
-        "a potato with googly eyes peeks around a corner",
-        "a snail wearing a referee shirt watches closely",
-        "a crowd of garden gnomes applauds enthusiastically",
-        "a raccoon in a tuxedo serves snacks in the background",
-        "a squirrel film crew records the scene",
-        "a very unimpressed goose stands in the foreground",
-        "a row of penguins in sunglasses acts as security",
-        "a tiny dinosaur holds an oversized umbrella over the scene",
-        "a lobster with a clipboard supervises everything",
+    "Oil painting": (
+        "loose impressionist oil painting with gentle brush marks",
+        "delicate oil study with fine brushwork",
+        "thin oil glazes with softly luminous layers",
+        "soft-edged oil painting with understated canvas texture",
+        "textured oil painting with modest impasto",
+        "classical oil painting with smoothly blended tones",
+    ),
+    "Claymation": (
+        "handmade stop-motion clay with faint fingerprints",
+        "smooth plasticine stop-motion with clean sculpted details",
+        "miniature clay animation with simple handcrafted forms",
+        "matte clay figures with delicate tool marks",
+        "softly rounded clay animation with subtle surface texture",
+        "clay stop-motion with small visible modeling seams",
+    ),
+}
+
+# At the highest level, add one compatible presentation detail. No new objects,
+# costumes, locations, altered anatomy, or changes to what the subject is doing.
+ACCENTS = {
+    "lighting": (
+        "soft overcast light with gentle shadows",
+        "warm late-afternoon light",
+        "gentle backlighting with a faint rim of light",
+        "soft dappled light across the scene",
+        "cool early-morning light",
+        "soft diffused side lighting",
+    ),
+    "palette": (
+        "a warm earthy color palette",
+        "cool muted colors with restrained contrast",
+        "a soft dusty-pastel palette",
+        "restrained jewel tones with gentle highlights",
+        "two dominant complementary colors with subtle accents",
+        "lightly desaturated colors with one warmer accent",
+    ),
+    "composition": (
+        "a slightly off-center subject with comfortable negative space",
+        "a slightly lower viewpoint while keeping the scene readable",
+        "a gentle three-quarter view with natural proportions",
+        "a little more breathing room around the main subject",
+        "closer framing that still shows the main subject and action",
+        "a slightly elevated viewpoint with clear foreground separation",
     ),
 }
 
 
-def select_modifiers(creativity: int, rng=random) -> list[str]:
-    count = 0 if creativity < 63 else 1 if creativity < 88 else 2
-    categories = rng.sample(list(MODIFIERS), count)
-    return [rng.choice(MODIFIERS[category]) for category in categories]
+class ModifierPicker:
+    """Shuffle each pool before reuse; the image worker calls this serially."""
+
+    def __init__(self, rng=random):
+        self.rng = rng
+        self.bags = {}
+        self.last = {}
+
+    def draw(self, key, choices):
+        bag = self.bags.setdefault(key, [])
+        if not bag:
+            bag.extend(self.rng.sample(list(choices), len(choices)))
+            # Also avoid an immediate repeat at the boundary between two bags.
+            if len(bag) > 1 and bag[-1] == self.last.get(key):
+                bag[0], bag[-1] = bag[-1], bag[0]
+        value = bag.pop()
+        self.last[key] = value
+        return value
+
+    def select(self, creativity: int, style: str = "Any") -> list[str]:
+        if creativity < 63:
+            return []
+        style = style if style in STYLE_VARIATIONS else "Any"
+        modifiers = [self.draw(("style", style), STYLE_VARIATIONS[style])]
+        if creativity >= 88:
+            category = self.draw("accent-category", ACCENTS)
+            modifiers.append(self.draw(("accent", category), ACCENTS[category]))
+        return modifiers
+
+
+_picker = ModifierPicker()
+
+
+def select_modifiers(creativity: int, style: str = "Any") -> list[str]:
+    return _picker.select(creativity, style)
 
 
 def compose_prompt(prompt: str, creativity: int, modifiers: list[str]) -> str:
@@ -91,4 +135,5 @@ def compose_prompt(prompt: str, creativity: int, modifiers: list[str]) -> str:
         return prompt + LITERAL_SUFFIX
     if not modifiers:
         return prompt
-    return prompt + ". Keep the main subject and action recognizable. " + ". ".join(modifiers) + "."
+    return (prompt + ". Keep the subject, action, setting and proportions unchanged. "
+            "Vary only the visual presentation: " + "; ".join(modifiers) + ".")

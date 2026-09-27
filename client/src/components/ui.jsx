@@ -95,12 +95,14 @@ export function GeneratedImage({ image }) {
   )
 }
 
-export function ModifierNote({ modifiers }) {
-  if (!modifiers?.length) return null
+export function ModifierNote({ modifiers, emptyText }) {
+  if (!modifiers?.length && !emptyText) return null
   return (
     <div className="modifier-note">
       <strong><span aria-hidden="true">🎲 </span>The AI was told…</strong>
-      <ul>{modifiers.map((modifier) => <li key={modifier}>{modifier}</li>)}</ul>
+      {modifiers?.length
+        ? <ul>{modifiers.map((modifier) => <li key={modifier}>{modifier}</li>)}</ul>
+        : <p className="muted">{emptyText}</p>}
     </div>
   )
 }

@@ -160,7 +160,14 @@ export default function ImageTest() {
               <div><p>{result.prompt}</p><span className="muted small">{result.style} · Creativity {result.creativity} · {duration(result.seconds)}</span></div>
               <a className="btn btn--secondary" href={result.url} download={`${result.model}-image.png`}>Save PNG ↓</a>
             </div>}
-            {result && <ModifierNote modifiers={result.modifiers} />}
+            <ModifierNote
+              modifiers={result?.modifiers}
+              emptyText={!result
+                ? 'Generate an image to see its added modifiers.'
+                : result.creativity < 63
+                  ? 'No extra modifiers were added to this image.'
+                  : 'Modifier details are unavailable for this image.'}
+            />
           </section>
         </div>
       </main>

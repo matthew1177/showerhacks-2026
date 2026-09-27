@@ -127,25 +127,31 @@ The game server queues image requests one at a time, with a five-minute timeout
 per image rather than per round; `IMAGE_TIMEOUT_MS` in `server/.env` overrides it.
 Existing art-style and creativity settings still apply.
 
-### Silly prompt modifiers
+### Subtle prompt modifiers
 
-The **Creativity** slider now adds concrete visual jokes to generated images:
+The **Creativity** slider adds variation to the image's presentation:
 **Literal** (0–34) asks for a simple depiction, **Balanced** (35–62) uses the prompt
-and art style as written, **Silly** (63–87) adds one random modifier, and
-**Unhinged** (88–100) adds two. Try **75** for a single gag or **90** for a combination.
-The default remains Balanced at 50.
+and art style as written, **Playful** (63–87) chooses one art-style variation, and
+**Expressive** (88–100) also adds a lighting, palette, or framing detail. Try **75**
+for a style variation or **90** for a combination. The default remains Balanced at 50.
 
-Modifiers include enormous roller skates, wobbly jelly, a giant teacup, and an
-audience of rubber ducks. Each image gets a fresh draw from 60 modifiers across
-accessories, materials, settings, proportions, and onlookers. Two-modifier combinations
-use different categories to avoid conflicting materials, locations, or proportions.
-The model is asked to keep the main subject and action recognizable.
-Modifiers are instructions to the model, so the resulting image may interpret them loosely.
+With **Any**, images can explore watercolor, colored pencil, linocut, paper-cut
+illustration, analog photography, and other media. An explicit art style stays
+within that family: Photo may use subtle film grain, while Oil painting may use
+fine brushwork or soft glazes. There are 60 directions in total: 12 for Any, six
+for each of the five explicit art styles, and 18 lighting, palette, and framing
+accents. Each pool is shuffled and exhausted before it repeats, with immediate
+repeats also avoided across refills. This rotation is shared by the image service
+and resets when it restarts.
+
+The model is asked to preserve the subject, action, setting, and proportions.
+Modifiers no longer add costumes, background characters, or replacement objects.
+They are instructions to the model, so results may interpret them loosely.
 
 The player's original prompt stays intact. Modifiers stay hidden during guessing
 and appear as **The AI was told…** alongside their image in the reveal. The image
 playground shows them immediately after generation. Scoring still compares each
-guess's image to the chain's first image, so added visual gags can affect scores.
+guess's image to the chain's first image, so presentation changes can affect scores.
 Restart the Python image service after updating to load the new modifier catalog;
 an older service still returns images but won't provide modifier notes.
 

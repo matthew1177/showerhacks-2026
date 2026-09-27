@@ -306,6 +306,7 @@ h1, h2, h3 { font-family: var(--u-font-display); font-weight: 800; letter-spacin
   overflow-wrap: anywhere;
 }
 .modifier-note strong { font-family: var(--u-font-display); }
+.modifier-note p { margin-top: 6px; }
 .modifier-note ul { margin: 6px 0 0; padding-left: 20px; }
 .modifier-note li + li { margin-top: 4px; }
 @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
