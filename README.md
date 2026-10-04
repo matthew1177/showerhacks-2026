@@ -1,5 +1,7 @@
 # Unprompted
 
+[View Unprompted! on Devpost](https://devpost.com/software/unprompted)
+
 A multiplayer prompt-and-guess game for the web and Discord Activities. React/Vite
 is in `client/`; the Node server in `server/` owns rooms and game state. An optional
 local Chroma Flash / SDXL-Turbo service generates images; gradient placeholders are used when
